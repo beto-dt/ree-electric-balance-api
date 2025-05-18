@@ -1,0 +1,125 @@
+# .gitignore for Electric Balance API project
+
+# Dependencias
+/node_modules
+/.pnp
+.pnp.js
+/package-lock.json
+/yarn.lock
+
+# Variables de entorno y configuración
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+
+# Logs
+/logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Directorios de compilación
+/dist
+/build
+/out
+
+# Archivos temporales
+.tmp
+.temp
+/temp
+.DS_Store
+Thumbs.db
+.cache
+
+# Directorios de cobertura y testing
+/coverage
+/.nyc_output
+/docs/coverage
+/test-reports
+/.jest-cache
+
+# Archivos de datos y backups
+/data
+*.csv
+*.json
+/backups
+/dumps
+/fixtures/output
+*.xlsx
+*.xls
+*.dump
+*.gz
+*.zip
+*.tar
+
+# IDEs y editores
+/.idea
+/.vscode
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+.project
+.classpath
+.settings/
+.DS_Store
+.directory
+.editorconfig
+.history
+
+# Archivos específicos de Docker
+.dockerignore
+docker-compose.override.yml
+
+# Certificados y claves
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+/certs
+
+# Archivos específicos de desarrollo
+/sandbox
+/playground
+.eslintcache
+.stylelintcache
+.prettierignore
+.prettierrc
+jsconfig.json
+tsconfig.tsbuildinfo
+
+# Archivos específicos de CI/CD
+/.gitlab-ci.yml
+/.github
+/.circleci
+/.travis.yml
+/jenkins
+/.jenkins
+
+# Archivos generados por herramientas
+/generated
+/artifacts
+.verdaccio
+.scannerwork
+/storybook-static
+
+# Archivos específicos del proyecto
+/app-data
+/uploads
+/downloads
+/mock-data
+*.pid
+*.seed
+*.local
+
+# Archivos de respuesta de API (para pruebas)
+/ree-api-responses
+/test-data

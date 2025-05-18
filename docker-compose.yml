@@ -1,0 +1,174 @@
+version: '3.8'
+
+services:
+  # Servidor de backend con Node.js y GraphQL
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: electric-balance-api
+    ports:
+      - "${PORT:-4000}:${PORT:-4000}"
+    volumes:
+      - ./logs:/app/logs
+      - ./.env:/app/.env
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - MONGODB_URI=mongodb://mongodb:27017/electric-balance
+      - PORT=${PORT:-4000}
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-4000}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    command: >
+      sh -c "npm run start:docker"
+
+  # Servicio de base de datos MongoDB
+  mongodb:
+    image: mongo:5.0
+    container_name: electric-balance-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+      - mongodb-config:/data/configdb
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    environment:
+      - MONGO_INITDB_DATABASE=electric-balance
+      # Para habilitar autenticación en producción, descomenta y configura estas variables
+      # - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USER:-}
+      # - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD:-}
+    restart: unless-stopped
+    networks:
+      - app-network
+    command: mongod --wiredTigerCacheSizeGB 1.0
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/electric-balance --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # Mongo Express para administración de MongoDB (opcional, solo para desarrollo)
+  mongo-express:
+    image: mongo-express:latest
+    container_name: electric-balance-mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_MONGODB_ENABLE_ADMIN=true
+      # Para habilitar autenticación en producción, descomenta y configura estas variables
+      # - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGODB_USER:-}
+      # - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGODB_PASSWORD:-}
+      - ME_CONFIG_BASICAUTH_USERNAME=${MONGO_EXPRESS_USER:-admin}
+      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASSWORD:-pass}
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+    networks:
+      - app-network
+    profiles:
+      - dev
+
+  # Frontend React (opcional, si decides desarrollar el frontend)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: electric-balance-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - REACT_APP_API_URL=http://localhost:${PORT:-4000}/graphql
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - app-network
+    profiles:
+      - frontend
+
+  # Servicio de monitoreo con Prometheus (opcional, para producción)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: electric-balance-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    restart: unless-stopped
+    networks:
+      - app-network
+    profiles:
+      - monitoring
+
+  # Servicio de visualización con Grafana (opcional, para producción)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: electric-balance-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - app-network
+    profiles:
+      - monitoring
+
+  # Servicio de seeding de datos (ejecutado una vez al inicio)
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: electric-balance-seed
+    volumes:
+      - ./.env:/app/.env
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - MONGODB_URI=mongodb://mongodb:27017/electric-balance
+    depends_on:
+      - mongodb
+    restart: "no"
+    networks:
+      - app-network
+    profiles:
+      - seed
+    command: >
+      sh -c "sleep 10 && node scripts/seedDatabase.js --verbose"
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mongodb-data:
+  mongodb-config:
+  prometheus-data:
+  grafana-data:
