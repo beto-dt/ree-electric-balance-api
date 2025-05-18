@@ -30,9 +30,9 @@ class ElectricBalanceService {
      */
     async analyzeBalanceDataByDateRange(startDate, endDate, timeScope = 'day') {
         const balanceData = await this.electricBalanceRepository.findByDateRange(
-            startDate,
-            endDate,
-            timeScope
+          startDate,
+          endDate,
+          timeScope
         );
 
         if (!balanceData || balanceData.length === 0) {
@@ -44,13 +44,13 @@ class ElectricBalanceService {
         }
 
         const totalGeneration = balanceData.reduce((sum, balance) =>
-            sum + balance.getTotalGeneration(), 0);
+          sum + balance.getTotalGeneration(), 0);
 
         const totalDemand = balanceData.reduce((sum, balance) =>
-            sum + balance.getTotalDemand(), 0);
+          sum + balance.getTotalDemand(), 0);
 
         const averageRenewablePercentage = balanceData.reduce((sum, balance) =>
-            sum + balance.getRenewablePercentage(), 0) / balanceData.length;
+          sum + balance.getRenewablePercentage(), 0) / balanceData.length;
 
         const generationByType = this._aggregateGenerationByType(balanceData);
 
@@ -85,11 +85,11 @@ class ElectricBalanceService {
      * @throws {Error} - Si hay problemas al obtener o procesar los datos
      */
     async comparePeriods(
-        currentPeriodStart,
-        currentPeriodEnd,
-        previousPeriodStart,
-        previousPeriodEnd,
-        timeScope = 'day'
+      currentPeriodStart,
+      currentPeriodEnd,
+      previousPeriodStart,
+      previousPeriodEnd,
+      timeScope = 'day'
     ) {
         const [currentPeriodData, previousPeriodData] = await Promise.all([
             this.electricBalanceRepository.findByDateRange(currentPeriodStart, currentPeriodEnd, timeScope),
@@ -97,37 +97,37 @@ class ElectricBalanceService {
         ]);
 
         const currentTotalGeneration = currentPeriodData.reduce((sum, balance) =>
-            sum + balance.getTotalGeneration(), 0);
+          sum + balance.getTotalGeneration(), 0);
         const currentTotalDemand = currentPeriodData.reduce((sum, balance) =>
-            sum + balance.getTotalDemand(), 0);
+          sum + balance.getTotalDemand(), 0);
         const currentRenewablePercentage = currentPeriodData.reduce((sum, balance) =>
-            sum + balance.getRenewablePercentage(), 0) / currentPeriodData.length;
+          sum + balance.getRenewablePercentage(), 0) / currentPeriodData.length;
 
         const previousTotalGeneration = previousPeriodData.reduce((sum, balance) =>
-            sum + balance.getTotalGeneration(), 0);
+          sum + balance.getTotalGeneration(), 0);
         const previousTotalDemand = previousPeriodData.reduce((sum, balance) =>
-            sum + balance.getTotalDemand(), 0);
+          sum + balance.getTotalDemand(), 0);
         const previousRenewablePercentage = previousPeriodData.reduce((sum, balance) =>
-            sum + balance.getRenewablePercentage(), 0) / previousPeriodData.length;
+          sum + balance.getRenewablePercentage(), 0) / previousPeriodData.length;
 
         const generationChange = this._calculatePercentageChange(
-            currentTotalGeneration,
-            previousTotalGeneration
+          currentTotalGeneration,
+          previousTotalGeneration
         );
         const demandChange = this._calculatePercentageChange(
-            currentTotalDemand,
-            previousTotalDemand
+          currentTotalDemand,
+          previousTotalDemand
         );
         const renewableChange = this._calculatePercentageChange(
-            currentRenewablePercentage,
-            previousRenewablePercentage
+          currentRenewablePercentage,
+          previousRenewablePercentage
         );
 
         const currentGenerationByType = this._aggregateGenerationByType(currentPeriodData);
         const previousGenerationByType = this._aggregateGenerationByType(previousPeriodData);
         const generationTypeChanges = this._compareGenerationDistributions(
-            currentGenerationByType,
-            previousGenerationByType
+          currentGenerationByType,
+          previousGenerationByType
         );
 
         return {
@@ -176,9 +176,9 @@ class ElectricBalanceService {
      */
     async calculateSustainabilityMetrics(startDate, endDate, timeScope = 'day') {
         const balanceData = await this.electricBalanceRepository.findByDateRange(
-            startDate,
-            endDate,
-            timeScope
+          startDate,
+          endDate,
+          timeScope
         );
 
         if (!balanceData || balanceData.length === 0) {
@@ -234,8 +234,8 @@ class ElectricBalanceService {
                 lowCarbonPercentage,
                 co2AvoidedEstimation: co2Avoided,
                 sustainabilityScore: this._calculateSustainabilityScore(
-                    renewablePercentage,
-                    lowCarbonPercentage
+                  renewablePercentage,
+                  lowCarbonPercentage
                 )
             },
             dailyTrend: this._calculateDailyTrend(balanceData, renewableTypes, lowCarbonTypes)
@@ -253,9 +253,9 @@ class ElectricBalanceService {
      */
     async detectPatternsAndAnomalies(startDate, endDate, timeScope = 'day') {
         const balanceData = await this.electricBalanceRepository.findByDateRange(
-            startDate,
-            endDate,
-            timeScope
+          startDate,
+          endDate,
+          timeScope
         );
 
         if (!balanceData || balanceData.length === 0) {
@@ -329,11 +329,11 @@ class ElectricBalanceService {
         }
 
         const totalGeneration = Object.values(aggregatedByType)
-            .reduce((sum, item) => sum + item.totalValue, 0);
+          .reduce((sum, item) => sum + item.totalValue, 0);
 
         for (const type in aggregatedByType) {
             aggregatedByType[type].percentage =
-                (aggregatedByType[type].totalValue / totalGeneration) * 100;
+              (aggregatedByType[type].totalValue / totalGeneration) * 100;
         }
 
         return aggregatedByType;
@@ -355,7 +355,7 @@ class ElectricBalanceService {
         }
 
         const sortedData = [...balanceData].sort((a, b) =>
-            a.timestamp.getTime() - b.timestamp.getTime());
+          a.timestamp.getTime() - b.timestamp.getTime());
 
         const generationValues = sortedData.map(b => b.getTotalGeneration());
         const demandValues = sortedData.map(b => b.getTotalDemand());
@@ -372,8 +372,8 @@ class ElectricBalanceService {
                 startValue: generationValues[0],
                 endValue: generationValues[generationValues.length - 1],
                 changePercentage: this._calculatePercentageChange(
-                    generationValues[generationValues.length - 1],
-                    generationValues[0]
+                  generationValues[generationValues.length - 1],
+                  generationValues[0]
                 )
             },
             demand: {
@@ -382,8 +382,8 @@ class ElectricBalanceService {
                 startValue: demandValues[0],
                 endValue: demandValues[demandValues.length - 1],
                 changePercentage: this._calculatePercentageChange(
-                    demandValues[demandValues.length - 1],
-                    demandValues[0]
+                  demandValues[demandValues.length - 1],
+                  demandValues[0]
                 )
             },
             renewablePercentage: {
@@ -392,8 +392,8 @@ class ElectricBalanceService {
                 startValue: renewableValues[0],
                 endValue: renewableValues[renewableValues.length - 1],
                 changePercentage: this._calculatePercentageChange(
-                    renewableValues[renewableValues.length - 1],
-                    renewableValues[0]
+                  renewableValues[renewableValues.length - 1],
+                  renewableValues[0]
                 )
             }
         };
@@ -408,7 +408,7 @@ class ElectricBalanceService {
      */
     _createTimeSeries(balanceData) {
         const sortedData = [...balanceData].sort((a, b) =>
-            a.timestamp.getTime() - b.timestamp.getTime());
+          a.timestamp.getTime() - b.timestamp.getTime());
 
         const generation = sortedData.map(balance => ({
             timestamp: balance.timestamp,
@@ -500,15 +500,15 @@ class ElectricBalanceService {
                 valueChange: current.totalValue - previous.totalValue,
                 percentageChange: current.percentage - previous.percentage,
                 percentageChangeRelative: this._calculatePercentageChange(
-                    current.percentage,
-                    previous.percentage
+                  current.percentage,
+                  previous.percentage
                 ),
                 color: current.color || previous.color
             });
         }
 
         return changes.sort((a, b) =>
-            Math.abs(b.percentageChangeRelative) - Math.abs(a.percentageChangeRelative));
+          Math.abs(b.percentageChangeRelative) - Math.abs(a.percentageChangeRelative));
     }
 
     /**
@@ -520,6 +520,7 @@ class ElectricBalanceService {
      */
     _calculateTrend(values) {
         if (values.length < 2) return 0;
+
         return (values[values.length - 1] - values[0]) / (values.length - 1);
     }
 
@@ -533,7 +534,7 @@ class ElectricBalanceService {
      */
     _calculateSustainabilityScore(renewablePercentage, lowCarbonPercentage) {
         return (renewablePercentage * 0.7) +
-            ((lowCarbonPercentage - renewablePercentage) * 0.3);
+          ((lowCarbonPercentage - renewablePercentage) * 0.3);
     }
 
     /**
@@ -547,7 +548,7 @@ class ElectricBalanceService {
      */
     _calculateDailyTrend(balanceData, renewableTypes, lowCarbonTypes) {
         const sortedData = [...balanceData].sort((a, b) =>
-            a.timestamp.getTime() - b.timestamp.getTime());
+          a.timestamp.getTime() - b.timestamp.getTime());
 
         return sortedData.map(balance => {
             let totalGen = balance.getTotalGeneration();
@@ -667,11 +668,11 @@ class ElectricBalanceService {
         }
 
         const averagesByDay = byDayOfWeek.map((sum, i) =>
-            counts[i] > 0 ? sum / counts[i] : 0);
+          counts[i] > 0 ? sum / counts[i] : 0);
 
         const avgOfAvgs = averagesByDay.reduce((sum, v) => sum + v, 0) / 7;
         const variance = averagesByDay.reduce(
-            (sum, v) => sum + Math.pow(v - avgOfAvgs, 2), 0) / 7;
+          (sum, v) => sum + Math.pow(v - avgOfAvgs, 2), 0) / 7;
 
         const weekdayLabels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
         const patternStrength = Math.sqrt(variance) / avgOfAvgs;
@@ -778,5 +779,133 @@ class ElectricBalanceService {
         if (absCorr < 0.8) return 'fuerte';
         return 'muy fuerte';
     }
+
+    /**
+     * Obtiene los picos y valles en un rango de fechas
+     *
+     * @param {Date} startDate - Fecha inicial
+     * @param {Date} endDate - Fecha final
+     * @param {string} timeScope - Alcance temporal (day, month, year)
+     * @param {string} metric - Métrica a analizar (generation, demand, renewable)
+     * @returns {Promise<Object>} - Picos y valles detectados
+     * @throws {Error} - Si hay problemas al obtener o procesar los datos
+     */
+    async getPeaksAndValleys(startDate, endDate, timeScope = 'day', metric = 'demand') {
+        const balanceData = await this.electricBalanceRepository.findByDateRange(
+          startDate,
+          endDate,
+          timeScope
+        );
+
+        if (!balanceData || balanceData.length < 3) {
+            return {
+                isEmpty: true,
+                message: 'Insufficient data to detect peaks and valleys'
+            };
+        }
+
+        const sortedData = [...balanceData].sort((a, b) =>
+          a.timestamp.getTime() - b.timestamp.getTime());
+
+        const series = sortedData.map(balance => {
+            let value;
+
+            switch (metric) {
+                case 'generation':
+                    value = balance.getTotalGeneration();
+                    break;
+                case 'renewable':
+                    value = balance.getRenewablePercentage();
+                    break;
+                case 'demand':
+                default:
+                    value = balance.getTotalDemand();
+                    break;
+            }
+
+            return {
+                timestamp: balance.timestamp,
+                value
+            };
+        });
+
+        const peaks = [];
+        for (let i = 1; i < series.length - 1; i++) {
+            if (series[i].value > series[i - 1].value && series[i].value > series[i + 1].value) {
+                peaks.push({
+                    timestamp: series[i].timestamp,
+                    value: series[i].value,
+                    index: i
+                });
+            }
+        }
+
+        const valleys = [];
+        for (let i = 1; i < series.length - 1; i++) {
+            if (series[i].value < series[i - 1].value && series[i].value < series[i + 1].value) {
+                valleys.push({
+                    timestamp: series[i].timestamp,
+                    value: series[i].value,
+                    index: i
+                });
+            }
+        }
+
+        if (series.length > 0) {
+            if (series[0].value > series[1].value) {
+                peaks.push({
+                    timestamp: series[0].timestamp,
+                    value: series[0].value,
+                    index: 0
+                });
+            } else if (series[0].value < series[1].value) {
+                valleys.push({
+                    timestamp: series[0].timestamp,
+                    value: series[0].value,
+                    index: 0
+                });
+            }
+
+            const last = series.length - 1;
+            if (series[last].value > series[last - 1].value) {
+                peaks.push({
+                    timestamp: series[last].timestamp,
+                    value: series[last].value,
+                    index: last
+                });
+            } else if (series[last].value < series[last - 1].value) {
+                valleys.push({
+                    timestamp: series[last].timestamp,
+                    value: series[last].value,
+                    index: last
+                });
+            }
+        }
+
+        peaks.sort((a, b) => b.value - a.value);
+        valleys.sort((a, b) => a.value - b.value);
+
+        const values = series.map(point => point.value);
+        const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
+        const max = Math.max(...values);
+        const min = Math.min(...values);
+
+        return {
+            isEmpty: false,
+            metric,
+            period: { startDate, endDate, timeScope },
+            statistics: {
+                mean,
+                max,
+                min,
+                range: max - min,
+                count: series.length
+            },
+            peaks: peaks.slice(0, 5),
+            valleys: valleys.slice(0, 5),
+            timeSeries: series
+        };
+    }
+}
 
 module.exports = ElectricBalanceService;
