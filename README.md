@@ -133,6 +133,19 @@ node scripts/seedDatabase.js --start 2019-01-01 --end 2019-01-31 --time-scope da
 ```
 
 
+## 🏃‍♂️ Enpoint del BackEnd ya subido en el servidor 
+
+
+```bash
+
+
+https://ree-electric-balance-api.onrender.com/
+
+https://ree-electric-balance-api.onrender.com/graphql
+
+
+```
+
 ## ✒️ Autor
 
 * **Luis Alberto De La Torre** - *Desarrollo Inicial* - [beto-dt](https://github.com/beto-dt)
