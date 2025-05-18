@@ -538,15 +538,12 @@ const electricBalanceResolvers = {
             try {
                 const latestBalance = await repositories.electricBalanceRepository.findMostRecent();
 
-                // Si no hay balances, devuelve null (esto es aceptable a nivel de objeto)
                 if (!latestBalance) {
                     return null;
                 }
 
-                // Verificar y garantizar que los campos no-nulos tienen valores válidos
                 if (latestBalance.getTotalGeneration() === null ||
                   latestBalance.getTotalGeneration() === undefined) {
-                    // Actualizar el objeto antes de devolverlo
                     latestBalance.totalGeneration = 0;
                 }
 
