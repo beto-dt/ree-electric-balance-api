@@ -9,7 +9,6 @@
 
 const { gql } = require('apollo-server-express');
 
-// Definición del esquema GraphQL para balance eléctrico
 const electricBalanceSchema = gql`
     """
     Tipo que representa un ítem de generación, demanda o intercambio eléctrico
@@ -44,7 +43,7 @@ const electricBalanceSchema = gql`
         """Datos de intercambios internacionales"""
         interchange: [BalanceItem!]!
         """Total de generación en MW"""
-        totalGeneration: Float # Quitado el ! para permitir valores nulos
+        totalGeneration: Float
         """Total de demanda en MW"""
         totalDemand: Float!
         """Balance entre generación y demanda"""

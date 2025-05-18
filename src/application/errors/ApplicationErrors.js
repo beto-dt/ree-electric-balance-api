@@ -27,10 +27,8 @@ class ApplicationError extends Error {
         this.metadata = options.metadata || {};
         this.timestamp = new Date();
 
-        // Capturer la stack trace correcta
         Error.captureStackTrace(this, this.constructor);
 
-        // Si hay un error original, añadir su stack trace
         if (this.originalError && this.originalError.stack) {
             this.stack += '\nCaused by: ' + this.originalError.stack;
         }
@@ -69,31 +67,6 @@ class ValidationError extends ApplicationError {
     constructor(message, options = {}) {
         super(message, options);
         this.validationErrors = options.validationErrors || {};
-    }
-
-    /**
-     * Añade un error de validación para un campo específico
-     *
-     * @param {string} field - Campo con error
-     * @param {string} message - Mensaje de error
-     * @returns {ValidationError} - La misma instancia para encadenamiento
-     */
-    addFieldError(field, message) {
-        if (!this.validationErrors) {
-            this.validationErrors = {};
-        }
-        this.validationErrors[field] = message;
-        return this;
-    }
-
-    /**
-     * Verifica si hay errores para un campo específico
-     *
-     * @param {string} field - Campo a verificar
-     * @returns {boolean} - true si hay errores, false si no
-     */
-    hasErrorForField(field) {
-        return this.validationErrors && Object.prototype.hasOwnProperty.call(this.validationErrors, field);
     }
 
     /**
@@ -241,7 +214,6 @@ class ApiResponseError extends ExternalResourceError {
             ...super.toJSON(),
             endpoint: this.endpoint,
             statusCode: this.statusCode,
-            // Evitamos incluir la respuesta completa por potencial tamaño
             hasResponse: this.response !== undefined
         };
     }
@@ -445,7 +417,6 @@ class NetworkError extends ExternalResourceError {
     }
 }
 
-// Exportar todas las clases de error
 module.exports = {
     ApplicationError,
     ValidationError,

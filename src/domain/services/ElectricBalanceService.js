@@ -35,7 +35,6 @@ class ElectricBalanceService {
             timeScope
         );
 
-        // Si no hay datos en el rango especificado
         if (!balanceData || balanceData.length === 0) {
             return {
                 isEmpty: true,
@@ -44,7 +43,6 @@ class ElectricBalanceService {
             };
         }
 
-        // Cálculo de estadísticas generales
         const totalGeneration = balanceData.reduce((sum, balance) =>
             sum + balance.getTotalGeneration(), 0);
 
@@ -54,13 +52,10 @@ class ElectricBalanceService {
         const averageRenewablePercentage = balanceData.reduce((sum, balance) =>
             sum + balance.getRenewablePercentage(), 0) / balanceData.length;
 
-        // Análisis de distribución de generación por tipos
         const generationByType = this._aggregateGenerationByType(balanceData);
 
-        // Análisis de tendencias temporales
         const trends = this._analyzeTrends(balanceData);
 
-        // Composición del resultado final
         return {
             isEmpty: false,
             period: { startDate, endDate, timeScope },
@@ -96,13 +91,11 @@ class ElectricBalanceService {
         previousPeriodEnd,
         timeScope = 'day'
     ) {
-        // Obtener datos para ambos períodos
         const [currentPeriodData, previousPeriodData] = await Promise.all([
             this.electricBalanceRepository.findByDateRange(currentPeriodStart, currentPeriodEnd, timeScope),
             this.electricBalanceRepository.findByDateRange(previousPeriodStart, previousPeriodEnd, timeScope)
         ]);
 
-        // Cálculos para el período actual
         const currentTotalGeneration = currentPeriodData.reduce((sum, balance) =>
             sum + balance.getTotalGeneration(), 0);
         const currentTotalDemand = currentPeriodData.reduce((sum, balance) =>
@@ -110,7 +103,6 @@ class ElectricBalanceService {
         const currentRenewablePercentage = currentPeriodData.reduce((sum, balance) =>
             sum + balance.getRenewablePercentage(), 0) / currentPeriodData.length;
 
-        // Cálculos para el período anterior
         const previousTotalGeneration = previousPeriodData.reduce((sum, balance) =>
             sum + balance.getTotalGeneration(), 0);
         const previousTotalDemand = previousPeriodData.reduce((sum, balance) =>
@@ -118,7 +110,6 @@ class ElectricBalanceService {
         const previousRenewablePercentage = previousPeriodData.reduce((sum, balance) =>
             sum + balance.getRenewablePercentage(), 0) / previousPeriodData.length;
 
-        // Cálculo de cambios porcentuales
         const generationChange = this._calculatePercentageChange(
             currentTotalGeneration,
             previousTotalGeneration
@@ -132,7 +123,6 @@ class ElectricBalanceService {
             previousRenewablePercentage
         );
 
-        // Análisis de cambios en la distribución de generación
         const currentGenerationByType = this._aggregateGenerationByType(currentPeriodData);
         const previousGenerationByType = this._aggregateGenerationByType(previousPeriodData);
         const generationTypeChanges = this._compareGenerationDistributions(
@@ -199,7 +189,6 @@ class ElectricBalanceService {
             };
         }
 
-        // Clasificación de fuentes de energía
         const renewableTypes = [
             'Hidráulica', 'Eólica', 'Solar fotovoltaica', 'Solar térmica',
             'Otras renovables', 'Hidroeólica'
@@ -209,7 +198,6 @@ class ElectricBalanceService {
             ...renewableTypes, 'Nuclear'
         ];
 
-        // Cálculo de métricas
         let totalGeneration = 0;
         let renewableGeneration = 0;
         let lowCarbonGeneration = 0;
@@ -229,12 +217,9 @@ class ElectricBalanceService {
             }
         }
 
-        // Cálculo de porcentajes
         const renewablePercentage = (renewableGeneration / totalGeneration) * 100;
         const lowCarbonPercentage = (lowCarbonGeneration / totalGeneration) * 100;
 
-        // Estimación de CO2 evitado (aproximación simplificada)
-        // Asumiendo que 1 MWh de energía no renovable emite ~0.5 toneladas de CO2
         const hoursInPeriod = (endDate - startDate) / (1000 * 60 * 60);
         const co2Avoided = (renewableGeneration * hoursInPeriod * 0.5) / 1000; // en toneladas
 
@@ -281,7 +266,6 @@ class ElectricBalanceService {
             };
         }
 
-        // Extracción de series temporales para análisis
         const generationSeries = balanceData.map(balance => ({
             timestamp: balance.timestamp,
             value: balance.getTotalGeneration()
@@ -297,12 +281,10 @@ class ElectricBalanceService {
             value: balance.getRenewablePercentage()
         }));
 
-        // Detección de anomalías (valores fuera de +/- 2 desviaciones estándar)
         const generationAnomalies = this._detectAnomalies(generationSeries);
         const demandAnomalies = this._detectAnomalies(demandSeries);
         const renewableAnomalies = this._detectAnomalies(renewableSeries);
 
-        // Detección de patrones cíclicos (simplificado)
         const cyclicalPatterns = this._detectCyclicalPatterns(demandSeries);
 
         return {
@@ -328,10 +310,8 @@ class ElectricBalanceService {
      * @private
      */
     _aggregateGenerationByType(balanceData) {
-        // Inicializar el objeto para acumular valores por tipo
         const aggregatedByType = {};
 
-        // Recorrer todos los balances y acumular valores por tipo
         for (const balance of balanceData) {
             for (const genItem of balance.generation) {
                 const { type, value, color } = genItem;
@@ -348,11 +328,9 @@ class ElectricBalanceService {
             }
         }
 
-        // Calcular el total global para los porcentajes
         const totalGeneration = Object.values(aggregatedByType)
             .reduce((sum, item) => sum + item.totalValue, 0);
 
-        // Actualizar porcentajes
         for (const type in aggregatedByType) {
             aggregatedByType[type].percentage =
                 (aggregatedByType[type].totalValue / totalGeneration) * 100;
@@ -369,7 +347,6 @@ class ElectricBalanceService {
      * @private
      */
     _analyzeTrends(balanceData) {
-        // Verificar que hay suficientes datos para analizar tendencias
         if (balanceData.length < 2) {
             return {
                 insufficient: true,
@@ -377,16 +354,13 @@ class ElectricBalanceService {
             };
         }
 
-        // Ordenar datos por fecha
         const sortedData = [...balanceData].sort((a, b) =>
             a.timestamp.getTime() - b.timestamp.getTime());
 
-        // Extraer series temporales para cada indicador
         const generationValues = sortedData.map(b => b.getTotalGeneration());
         const demandValues = sortedData.map(b => b.getTotalDemand());
         const renewableValues = sortedData.map(b => b.getRenewablePercentage());
 
-        // Calcular pendientes simples para determinar tendencias
         const generationTrend = this._calculateTrend(generationValues);
         const demandTrend = this._calculateTrend(demandValues);
         const renewableTrend = this._calculateTrend(renewableValues);
@@ -433,11 +407,9 @@ class ElectricBalanceService {
      * @private
      */
     _createTimeSeries(balanceData) {
-        // Ordenar datos por fecha
         const sortedData = [...balanceData].sort((a, b) =>
             a.timestamp.getTime() - b.timestamp.getTime());
 
-        // Crear series para cada indicador principal
         const generation = sortedData.map(balance => ({
             timestamp: balance.timestamp,
             value: balance.getTotalGeneration()
@@ -458,17 +430,14 @@ class ElectricBalanceService {
             value: balance.getBalance()
         }));
 
-        // Crear series para tipos específicos de generación
         const generationByType = {};
 
-        // Inicializar tipos de generación
         if (sortedData.length > 0) {
             const firstBalance = sortedData[0];
             for (const gen of firstBalance.generation) {
                 generationByType[gen.type] = [];
             }
 
-            // Rellenar series por cada tipo
             for (const balance of sortedData) {
                 for (const gen of balance.generation) {
                     generationByType[gen.type].push({
@@ -513,7 +482,6 @@ class ElectricBalanceService {
     _compareGenerationDistributions(currentDist, previousDist) {
         const changes = [];
 
-        // Unir todos los tipos de ambas distribuciones
         const allTypes = new Set([
             ...Object.keys(currentDist),
             ...Object.keys(previousDist)
@@ -539,7 +507,6 @@ class ElectricBalanceService {
             });
         }
 
-        // Ordenar por cambio relativo de mayor a menor
         return changes.sort((a, b) =>
             Math.abs(b.percentageChangeRelative) - Math.abs(a.percentageChangeRelative));
     }
@@ -553,9 +520,6 @@ class ElectricBalanceService {
      */
     _calculateTrend(values) {
         if (values.length < 2) return 0;
-
-        // Simplificación del cálculo de tendencia usando la pendiente entre
-        // el primer y último punto
         return (values[values.length - 1] - values[0]) / (values.length - 1);
     }
 
@@ -568,7 +532,6 @@ class ElectricBalanceService {
      * @private
      */
     _calculateSustainabilityScore(renewablePercentage, lowCarbonPercentage) {
-        // Fórmula simple: 70% peso para renovables, 30% para bajas emisiones
         return (renewablePercentage * 0.7) +
             ((lowCarbonPercentage - renewablePercentage) * 0.3);
     }
@@ -622,7 +585,6 @@ class ElectricBalanceService {
     _detectAnomalies(series) {
         if (series.length < 3) return [];
 
-        // Calcular media y desviación estándar
         const values = series.map(point => point.value);
         const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
 
@@ -630,7 +592,6 @@ class ElectricBalanceService {
         const variance = squaredDiffs.reduce((sum, v) => sum + v, 0) / values.length;
         const stdDev = Math.sqrt(variance);
 
-        // Buscar valores fuera de 2 desviaciones estándar
         const anomalies = [];
 
         for (let i = 0; i < series.length; i++) {
@@ -664,7 +625,6 @@ class ElectricBalanceService {
             return { detected: false, reason: 'Insufficient data points' };
         }
 
-        // Simplificación para detectar patrones diarios/semanales
         const dailyPattern = this._checkDailyPattern(series);
         const weeklyPattern = this._checkWeeklyPattern(series);
 
@@ -683,7 +643,6 @@ class ElectricBalanceService {
      * @private
      */
     _checkDailyPattern(series) {
-        // Implementación simplificada
         return {
             detected: false,
             message: 'Daily pattern detection requires hourly data'
@@ -698,7 +657,6 @@ class ElectricBalanceService {
      * @private
      */
     _checkWeeklyPattern(series) {
-        // Agrupar por día de la semana
         const byDayOfWeek = [0, 0, 0, 0, 0, 0, 0]; // Domingo a Sábado
         const counts = [0, 0, 0, 0, 0, 0, 0];
 
@@ -708,16 +666,13 @@ class ElectricBalanceService {
             counts[dayOfWeek]++;
         }
 
-        // Calcular promedios por día
         const averagesByDay = byDayOfWeek.map((sum, i) =>
             counts[i] > 0 ? sum / counts[i] : 0);
 
-        // Calcular varianza entre días para ver si hay un patrón claro
         const avgOfAvgs = averagesByDay.reduce((sum, v) => sum + v, 0) / 7;
         const variance = averagesByDay.reduce(
             (sum, v) => sum + Math.pow(v - avgOfAvgs, 2), 0) / 7;
 
-        // Si hay suficiente varianza, consideramos que hay un patrón
         const weekdayLabels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
         const patternStrength = Math.sqrt(variance) / avgOfAvgs;
 
@@ -741,12 +696,10 @@ class ElectricBalanceService {
      * @private
      */
     _detectCorrelations(balanceData) {
-        // Extraer series para diferentes métricas
         const totalDemand = balanceData.map(b => b.getTotalDemand());
         const totalGeneration = balanceData.map(b => b.getTotalGeneration());
         const renewablePercentage = balanceData.map(b => b.getRenewablePercentage());
 
-        // Calcular correlaciones simples
         const demandVsGeneration = this._calculateCorrelation(totalDemand, totalGeneration);
         const demandVsRenewable = this._calculateCorrelation(totalDemand, renewablePercentage);
         const generationVsRenewable = this._calculateCorrelation(totalGeneration, renewablePercentage);
@@ -786,11 +739,9 @@ class ElectricBalanceService {
             return 0;
         }
 
-        // Calcular medias
         const meanA = seriesA.reduce((sum, val) => sum + val, 0) / seriesA.length;
         const meanB = seriesB.reduce((sum, val) => sum + val, 0) / seriesB.length;
 
-        // Calcular covarianza y varianzas
         let covariance = 0;
         let varianceA = 0;
         let varianceB = 0;
@@ -804,7 +755,6 @@ class ElectricBalanceService {
             varianceB += diffB * diffB;
         }
 
-        // Evitar división por cero
         if (varianceA === 0 || varianceB === 0) {
             return 0;
         }
@@ -828,142 +778,5 @@ class ElectricBalanceService {
         if (absCorr < 0.8) return 'fuerte';
         return 'muy fuerte';
     }
-
-    /**
-     * Obtiene los picos y valles en un rango de fechas
-     *
-     * @param {Date} startDate - Fecha inicial
-     * @param {Date} endDate - Fecha final
-     * @param {string} timeScope - Alcance temporal (day, month, year)
-     * @param {string} metric - Métrica a analizar (generation, demand, renewable)
-     * @returns {Promise<Object>} - Picos y valles detectados
-     * @throws {Error} - Si hay problemas al obtener o procesar los datos
-     */
-    async getPeaksAndValleys(startDate, endDate, timeScope = 'day', metric = 'demand') {
-        const balanceData = await this.electricBalanceRepository.findByDateRange(
-            startDate,
-            endDate,
-            timeScope
-        );
-
-        if (!balanceData || balanceData.length < 3) {
-            return {
-                isEmpty: true,
-                message: 'Insufficient data to detect peaks and valleys'
-            };
-        }
-
-        // Ordenar los datos por fecha
-        const sortedData = [...balanceData].sort((a, b) =>
-            a.timestamp.getTime() - b.timestamp.getTime());
-
-        // Extraer los valores según la métrica seleccionada
-        const series = sortedData.map(balance => {
-            let value;
-
-            switch (metric) {
-                case 'generation':
-                    value = balance.getTotalGeneration();
-                    break;
-                case 'renewable':
-                    value = balance.getRenewablePercentage();
-                    break;
-                case 'demand':
-                default:
-                    value = balance.getTotalDemand();
-                    break;
-            }
-
-            return {
-                timestamp: balance.timestamp,
-                value
-            };
-        });
-
-        // Detectar picos (máximos locales)
-        const peaks = [];
-        for (let i = 1; i < series.length - 1; i++) {
-            if (series[i].value > series[i - 1].value && series[i].value > series[i + 1].value) {
-                peaks.push({
-                    timestamp: series[i].timestamp,
-                    value: series[i].value,
-                    index: i
-                });
-            }
-        }
-
-        // Detectar valles (mínimos locales)
-        const valleys = [];
-        for (let i = 1; i < series.length - 1; i++) {
-            if (series[i].value < series[i - 1].value && series[i].value < series[i + 1].value) {
-                valleys.push({
-                    timestamp: series[i].timestamp,
-                    value: series[i].value,
-                    index: i
-                });
-            }
-        }
-
-        // Añadir extremos si son relevantes
-        if (series.length > 0) {
-            // Añadir primer punto si es un extremo
-            if (series[0].value > series[1].value) {
-                peaks.push({
-                    timestamp: series[0].timestamp,
-                    value: series[0].value,
-                    index: 0
-                });
-            } else if (series[0].value < series[1].value) {
-                valleys.push({
-                    timestamp: series[0].timestamp,
-                    value: series[0].value,
-                    index: 0
-                });
-            }
-
-            // Añadir último punto si es un extremo
-            const last = series.length - 1;
-            if (series[last].value > series[last - 1].value) {
-                peaks.push({
-                    timestamp: series[last].timestamp,
-                    value: series[last].value,
-                    index: last
-                });
-            } else if (series[last].value < series[last - 1].value) {
-                valleys.push({
-                    timestamp: series[last].timestamp,
-                    value: series[last].value,
-                    index: last
-                });
-            }
-        }
-
-        // Ordenar picos y valles por valor
-        peaks.sort((a, b) => b.value - a.value);
-        valleys.sort((a, b) => a.value - b.value);
-
-        // Calcular estadísticas
-        const values = series.map(point => point.value);
-        const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
-        const max = Math.max(...values);
-        const min = Math.min(...values);
-
-        return {
-            isEmpty: false,
-            metric,
-            period: { startDate, endDate, timeScope },
-            statistics: {
-                mean,
-                max,
-                min,
-                range: max - min,
-                count: series.length
-            },
-            peaks: peaks.slice(0, 5), // Top 5 picos
-            valleys: valleys.slice(0, 5), // Top 5 valles
-            timeSeries: series
-        };
-    }
-}
 
 module.exports = ElectricBalanceService;

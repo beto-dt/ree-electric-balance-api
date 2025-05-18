@@ -10,7 +10,6 @@
 const mongoose = require('mongoose');
 const { ConfigurationError } = require('../../application/errors/ApplicationErrors');
 
-// Variables para el estado de la conexión
 let isConnected = false;
 let isConnecting = false;
 let connectionAttempts = 0;
@@ -32,7 +31,6 @@ const MongoConnection = {
      */
     async initialize(config, logger = console) {
         try {
-            // Validar configuración
             if (!config || !config.uri) {
                 throw new ConfigurationError(
                     'MongoDB connection URI is required',
@@ -40,38 +38,32 @@ const MongoConnection = {
                 );
             }
 
-            // Si ya hay una conexión establecida, devolverla
             if (isConnected) {
                 logger.info('Using existing MongoDB connection');
                 return mongoose.connection;
             }
 
-            // Si ya hay un intento de conexión en curso, esperar a que termine
             if (isConnecting) {
                 logger.info('Connection attempt already in progress, waiting...');
                 await this._waitForConnection();
                 return mongoose.connection;
             }
 
-            // Iniciar nuevo intento de conexión
             isConnecting = true;
             connectionAttempts = 0;
 
-            // Configurar opciones por defecto si no se proporcionan
             const options = {
                 useNewUrlParser: true,
                 useUnifiedTopology: true,
                 serverSelectionTimeoutMS: 5000,
                 maxPoolSize: 10,
                 socketTimeoutMS: 45000,
-                family: 4,  // Usar IPv4, omitir para permitir IPv6
+                family: 4,
                 ...config.options
             };
 
-            // Configurar eventos de conexión
             this._setupConnectionEvents(logger);
 
-            // Intentar conectar
             logger.info('Connecting to MongoDB...');
             await mongoose.connect(config.uri, options);
 
@@ -84,7 +76,6 @@ const MongoConnection = {
             isConnecting = false;
             logger.error(`Failed to connect to MongoDB: ${error.message}`, error);
 
-            // Intentar reconexión si es un error de conexión
             if (error.name === 'MongoError' || error.name === 'MongooseError') {
                 await this._attemptReconnection(config, logger);
             } else {
@@ -112,20 +103,6 @@ const MongoConnection = {
     },
 
     /**
-     * Obtiene la conexión actual o inicia una nueva
-     *
-     * @param {Object} config - Configuración de conexión
-     * @param {Object} logger - Logger para registrar eventos
-     * @returns {Promise<mongoose.Connection>} - Conexión de Mongoose
-     */
-    async getConnection(config, logger = console) {
-        if (!isConnected) {
-            return this.initialize(config, logger);
-        }
-        return mongoose.connection;
-    },
-
-    /**
      * Verifica el estado de la conexión
      *
      * @returns {Object} - Estado de la conexión
@@ -135,7 +112,6 @@ const MongoConnection = {
             isConnected,
             isConnecting,
             readyState: mongoose.connection.readyState,
-            // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
             connectionAttempts
         };
     },
@@ -157,7 +133,7 @@ const MongoConnection = {
         }
 
         connectionAttempts++;
-        const delay = Math.pow(2, connectionAttempts) * 1000; // Backoff exponencial
+        const delay = Math.pow(2, connectionAttempts) * 1000;
 
         logger.info(`Reconnecting to MongoDB in ${delay}ms (attempt ${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
 
@@ -191,35 +167,29 @@ const MongoConnection = {
     _setupConnectionEvents(logger) {
         const connection = mongoose.connection;
 
-        // Cuando la conexión se establece correctamente
         connection.on('connected', () => {
             isConnected = true;
             isConnecting = false;
             logger.info('MongoDB connection established');
         });
 
-        // Cuando la conexión se cierra
         connection.on('disconnected', () => {
             isConnected = false;
             logger.info('MongoDB connection disconnected');
         });
 
-        // Cuando hay un error en la conexión
         connection.on('error', (err) => {
             logger.error(`MongoDB connection error: ${err.message}`, err);
 
             if (isConnected) {
-                // Si estábamos conectados, la conexión se perdió
                 isConnected = false;
             }
         });
 
-        // Cuando la conexión está lista para ser usada
         connection.once('open', () => {
             logger.info('MongoDB connection ready');
         });
 
-        // Para depuración - eventos adicionales
         if (process.env.NODE_ENV === 'development') {
             connection.on('reconnected', () => {
                 logger.debug('MongoDB reconnected');
@@ -250,7 +220,6 @@ const MongoConnection = {
                 };
             }
 
-            // Verificar que la conexión está realmente viva con una operación simple
             const adminDb = mongoose.connection.db.admin();
             const result = await adminDb.ping();
 
@@ -269,50 +238,6 @@ const MongoConnection = {
             };
         }
     },
-
-    /**
-     * Obtiene información sobre la base de datos
-     *
-     * @returns {Promise<Object>} - Información de la base de datos
-     */
-    async getDatabaseInfo() {
-        if (!isConnected) {
-            throw new Error('Not connected to MongoDB');
-        }
-
-        try {
-            const connection = mongoose.connection;
-            const adminDb = connection.db.admin();
-
-            // Obtener información del servidor
-            const serverStatus = await adminDb.serverStatus();
-
-            // Obtener estadísticas de la base de datos
-            const dbStats = await connection.db.stats();
-
-            // Obtener nombres de colecciones
-            const collections = await connection.db.listCollections().toArray();
-
-            return {
-                dbName: connection.db.databaseName,
-                host: serverStatus.host,
-                version: serverStatus.version,
-                collections: collections.map(col => col.name),
-                stats: {
-                    collections: dbStats.collections,
-                    documents: dbStats.objects,
-                    dataSize: `${(dbStats.dataSize / (1024 * 1024)).toFixed(2)} MB`,
-                    storageSize: `${(dbStats.storageSize / (1024 * 1024)).toFixed(2)} MB`,
-                    indices: dbStats.indexes,
-                    indexSize: `${(dbStats.indexSize / (1024 * 1024)).toFixed(2)} MB`
-                },
-                connectionPoolSize: serverStatus.connections.current,
-                timestamp: new Date()
-            };
-        } catch (error) {
-            throw new Error(`Failed to get database info: ${error.message}`);
-        }
-    }
 };
 
 module.exports = MongoConnection;

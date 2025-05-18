@@ -12,25 +12,17 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "start:docker": "node src/index.js",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "test:integration": "jest --config=jest.integration.config.js",
-    "test:e2e": "jest --config=jest.e2e.config.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{js,jsx,json,md}\"",
     "seed": "node scripts/seedDatabase.js",
-    "test:ree-api": "node scripts/testREEApi.js",
-    "db:init": "node scripts/initializeDatabase.js",
     "prepare": "node -e \"if(process.env.NODE_ENV !== 'production') require('husky').install()\"",
     "docker:build": "docker build -t electric-balance-api .",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:restart": "docker-compose restart",
     "docker:logs": "docker-compose logs -f",
-    "docs": "jsdoc -c jsdoc.json",
-    "validate": "npm run lint && npm run test"
+    "docs": "jsdoc -c jsdoc.json"
   },
   "keywords": [
     "balance-electrico",
@@ -41,7 +33,7 @@
     "nodejs",
     "react"
   ],
-  "author": "Tu Nombre <tu.email@ejemplo.com>",
+  "author": "Luis Alberto De La Torre <luis.atorred24@gmail.com>",
   "license": "MIT",
   "repository": {
     "type": "git",

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: infrastructure/graphql/schema.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: infrastructure/graphql/schema.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @file schema.js
+ * @description Definición del esquema GraphQL principal
+ *
+ * Este archivo combina todos los tipos y resolvers de GraphQL para crear
+ * el esquema completo que será utilizado por el servidor.
+ */
+
+const { gql } = require('apollo-server-express');
+const { makeExecutableSchema } = require('@graphql-tools/schema');
+const { merge } = require('lodash');
+
+// Importar esquemas específicos
+const electricBalanceSchema = require('./schema/electricBalance');
+
+// Importar resolvers específicos
+const electricBalanceResolvers = require('./resolvers/electricBalanceResolvers');
+
+// Definir tipos base y directives
+const baseTypeDefs = gql`
+    """
+    Directiva para marcar un campo como deprecado
+    """
+    directive @deprecated(
+        reason: String = "No longer supported"
+    ) on FIELD_DEFINITION | ENUM_VALUE
+
+    """
+    Directiva para especificar niveles de acceso requeridos
+    """
+    directive @requiresAuth(
+        role: String = "USER"
+    ) on FIELD_DEFINITION
+
+    """
+    Scalar para fechas ISO 8601
+    """
+    scalar DateTime
+
+    """
+    Scalar para objetos JSON
+    """
+    scalar JSONObject
+
+    """
+    Tipo para información sobre la API
+    """
+    type ApiInfo {
+        """Nombre de la API"""
+        name: String!
+        """Versión de la API"""
+        version: String!
+        """Descripción de la API"""
+        description: String!
+        """URL base de la API"""
+        baseUrl: String!
+        """Fecha de actualización"""
+        lastUpdated: DateTime!
+    }
+
+    """
+    Tipo para información sobre el estado del servidor
+    """
+    type ServerStatus {
+        """Estado del servidor"""
+        status: String!
+        """Tiempo de actividad en segundos"""
+        uptime: Float!
+        """Estado de la conexión a la base de datos"""
+        dbStatus: String!
+        """Estado de la API de REE"""
+        reeApiStatus: String!
+        """Fecha y hora actual del servidor"""
+        serverTime: DateTime!
+        """Información sobre la versión"""
+        version: String!
+    }
+
+    """
+    Tipo Query base
+    """
+    type Query {
+        """Obtiene información sobre la API"""
+        apiInfo: ApiInfo!
+
+        """Obtiene el estado actual del servidor"""
+        serverStatus: ServerStatus!
+    }
+
+    """
+    Tipo Mutation base
+    """
+    type Mutation {
+        """Ping para verificar que la API está funcionando"""
+        ping: String!
+    }
+`;
+
+const baseResolvers = {
+    Query: {
+        apiInfo: () => ({
+            name: 'REE Balance Eléctrico API',
+            version: '1.0.0',
+            description: 'API para acceder a datos de balance eléctrico de Red Eléctrica de España',
+            baseUrl: '/graphql',
+            lastUpdated: new Date()
+        }),
+
+        serverStatus: async (_, __, { dataSources, services }) => {
+            const reeApiStatus = await services.reeApiService.checkApiStatus();
+
+            const dbStatus = await services.mongoConnection.healthCheck();
+
+            return {
+                status: 'operational',
+                uptime: process.uptime(),
+                dbStatus: dbStatus.status,
+                reeApiStatus: reeApiStatus.status,
+                serverTime: new Date(),
+                version: process.env.APP_VERSION || '1.0.0'
+            };
+        }
+    },
+
+    Mutation: {
+        ping: () => 'pong'
+    }
+};
+
+const typeDefs = [
+    baseTypeDefs,
+    electricBalanceSchema
+];
+
+const resolvers = merge(
+    baseResolvers,
+    electricBalanceResolvers
+);
+
+const schema = makeExecutableSchema({
+    typeDefs,
+    resolvers
+});
+
+const configureMocks = (schema, preserveResolvers = true) => {
+    if (process.env.NODE_ENV === 'development' &amp;&amp; process.env.ENABLE_GRAPHQL_MOCKS === 'true') {
+        const { addMocksToSchema } = require('@graphql-tools/mock');
+        const mocks = {
+            DateTime: () => new Date().toISOString(),
+            JSONObject: () => ({ mockData: true }),
+            ElectricBalance: () => ({
+                id: () => `mock-balance-${Math.floor(Math.random() * 1000)}`,
+                timestamp: () => new Date(),
+                totalGeneration: () => Math.random() * 40000 + 20000,
+                totalDemand: () => Math.random() * 35000 + 20000,
+                renewablePercentage: () => Math.random() * 100
+            })
+        };
+
+        return addMocksToSchema({
+            schema,
+            mocks,
+            preserveResolvers
+        });
+    }
+
+    return schema;
+};
+
+module.exports = {
+    schema,
+    configureMocks
+};
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="ApiRequestError.html">ApiRequestError</a></li><li><a href="ApiResponseError.html">ApiResponseError</a></li><li><a href="ApplicationError.html">ApplicationError</a></li><li><a href="BusinessRuleViolationError.html">BusinessRuleViolationError</a></li><li><a href="ConfigurationError.html">ConfigurationError</a></li><li><a href="DuplicateDataError.html">DuplicateDataError</a></li><li><a href="ElectricBalance.html">ElectricBalance</a></li><li><a href="ElectricBalanceController.html">ElectricBalanceController</a></li><li><a href="ExternalResourceError.html">ExternalResourceError</a></li><li><a href="FetchREEData.html">FetchREEData</a></li><li><a href="GetElectricBalanceByDateRange.html">GetElectricBalanceByDateRange</a></li><li><a href="InvalidDataError.html">InvalidDataError</a></li><li><a href="InvalidDateRangeError.html">InvalidDateRangeError</a></li><li><a href="MongoElectricBalanceRepository.html">MongoElectricBalanceRepository</a></li><li><a href="NetworkError.html">NetworkError</a></li><li><a href="NotAuthorizedError.html">NotAuthorizedError</a></li><li><a href="NotFoundError.html">NotFoundError</a></li><li><a href="REEApiService.html">REEApiService</a></li><li><a href="REEDataFetcher.html">REEDataFetcher</a></li><li><a href="RepositoryError.html">RepositoryError</a></li><li><a href="SchedulerManager.html">SchedulerManager</a></li><li><a href="ValidationError.html">ValidationError</a></li></ul><h3>Global</h3><ul><li><a href="global.html#MongoConnection">MongoConnection</a></li><li><a href="global.html#balanceItemSchema">balanceItemSchema</a></li><li><a href="global.html#bootstrap">bootstrap</a></li><li><a href="global.html#compareDatesIgnoringTime">compareDatesIgnoringTime</a></li><li><a href="global.html#config">config</a></li><li><a href="global.html#connectToDatabase">connectToDatabase</a></li><li><a href="global.html#createComponentLogger">createComponentLogger</a></li><li><a href="global.html#createGraphQLLogger">createGraphQLLogger</a></li><li><a href="global.html#createGraphQLServer">createGraphQLServer</a></li><li><a href="global.html#createTransports">createTransports</a></li><li><a href="global.html#determineMongoErrorCode">determineMongoErrorCode</a></li><li><a href="global.html#determineTimeScope">determineTimeScope</a></li><li><a href="global.html#electricBalanceResolvers">electricBalanceResolvers</a></li><li><a href="global.html#electricBalanceSchema">electricBalanceSchema</a></li><li><a href="global.html#errorLogger">errorLogger</a></li><li><a href="global.html#errorMiddleware">errorMiddleware</a></li><li><a href="global.html#extendWithLogger">extendWithLogger</a></li><li><a href="global.html#formatDate">formatDate</a></li><li><a href="global.html#formatDateForREEApi">formatDateForREEApi</a></li><li><a href="global.html#formatDateForUI">formatDateForUI</a></li><li><a href="global.html#formatDateISO">formatDateISO</a></li><li><a href="global.html#getDateRangeForPeriod">getDateRangeForPeriod</a></li><li><a href="global.html#getEnv">getEnv</a></li><li><a href="global.html#getErrorCodeFromType">getErrorCodeFromType</a></li><li><a href="global.html#getHttpStatusFromError">getHttpStatusFromError</a></li><li><a href="global.html#getMostRecentDate">getMostRecentDate</a></li><li><a href="global.html#handleApiError">handleApiError</a></li><li><a href="global.html#handleDatabaseError">handleDatabaseError</a></li><li><a href="global.html#handleError">handleError</a></li><li><a href="global.html#handleREEApiError">handleREEApiError</a></li><li><a href="global.html#handleValidationError">handleValidationError</a></li><li><a href="global.html#initializeRepositories">initializeRepositories</a></li><li><a href="global.html#initializeSchedulers">initializeSchedulers</a></li><li><a href="global.html#initializeServices">initializeServices</a></li><li><a href="global.html#logFormats">logFormats</a></li><li><a href="global.html#logger">logger</a></li><li><a href="global.html#mapErrorToGraphQLError">mapErrorToGraphQLError</a></li><li><a href="global.html#parseDate">parseDate</a></li><li><a href="global.html#requestLogger">requestLogger</a></li><li><a href="global.html#setupBasicRoutes">setupBasicRoutes</a></li><li><a href="global.html#setupGracefulShutdown">setupGracefulShutdown</a></li><li><a href="global.html#setupGraphQLServer">setupGraphQLServer</a></li><li><a href="global.html#setupMiddlewares">setupMiddlewares</a></li><li><a href="global.html#toArray">toArray</a></li><li><a href="global.html#toBoolean">toBoolean</a></li><li><a href="global.html#toNumber">toNumber</a></li><li><a href="global.html#toObject">toObject</a></li><li><a href="global.html#tryListen">tryListen</a></li><li><a href="global.html#validateDateRange">validateDateRange</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Sun May 18 2025 01:47:36 GMT-0500 (Ecuador Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

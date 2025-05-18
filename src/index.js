@@ -6,33 +6,26 @@
  * establece las conexiones a servicios externos y arranca la aplicación.
  */
 
-// Importar dependencias
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
-const mongoose = require('mongoose');
 const path = require('path');
 
-// Importar configuración
 const config = require('./config/environment');
 const logger = require('./config/logger');
 const { schedulerManager } = require('./config/schedulers');
 
-// Importar servicios y repositorios
 const MongoConnection = require('./infrastructure/database/connection');
 const REEApiService = require('./infrastructure/external/REEApiService');
 const MongoElectricBalanceRepository = require('./infrastructure/repositories/MongoElectricBalanceRepository');
 const ElectricBalanceService = require('./domain/services/ElectricBalanceService');
 
-// Importar GraphQL server
 const createGraphQLServer = require('./infrastructure/graphql/server');
 
-// Crear aplicación Express
 const app = express();
 
-// Array para almacenar los servicios inicializados
 const initializedServices = [];
 
 
@@ -182,20 +175,14 @@ async function bootstrap() {
  * Configura los middlewares básicos de Express
  */
 function setupMiddlewares() {
-    // Middleware de logging
     app.use(logger.requestLogger);
 
-    // Configuración CORS adecuada para Apollo Studio y otros clientes
     const corsOptions = getCorsOptions();
 
-    // Aplicar configuración CORS
     app.use(cors(corsOptions));
-    // Log de configuración CORS
     logger.info(`CORS enabled with origins: ${Array.isArray(corsOptions.origin) ? corsOptions.origin.join(', ') : corsOptions.origin}`);
 
-    // Seguridad con configuración adaptada para GraphQL
     app.use(helmet({
-        // Permitir conectar a Apollo Studio
         crossOriginEmbedderPolicy: false,
         contentSecurityPolicy: {
             directives: {
@@ -210,14 +197,11 @@ function setupMiddlewares() {
 
     app.use(compression());
 
-    // Parseo de JSON y urlencoded
     app.use(express.json({ limit: config.server.bodyLimit }));
     app.use(express.urlencoded({ extended: true, limit: config.server.bodyLimit }));
 
-    // Servir archivos estáticos (documentación, etc.)
     app.use('/docs', express.static(path.join(__dirname, '../docs')));
 
-    // Timeout para peticiones largas
     app.use((req, res, next) => {
         res.setTimeout(config.server.requestTimeout, () => {
             logger.warn(`Request timeout: ${req.method} ${req.url}`);
@@ -226,7 +210,6 @@ function setupMiddlewares() {
         next();
     });
 
-    // Middleware para options preflight de CORS
     app.options('*', cors(corsOptions));
 
     logger.debug('Express middlewares configured');
@@ -282,7 +265,6 @@ function initializeRepositories() {
 function initializeServices(repositories) {
     logger.info('Initializing services');
 
-    // Servicio para la API de REE
     const reeApiService = new REEApiService(
         {
             baseUrl: config.ree.baseUrl,
@@ -292,12 +274,10 @@ function initializeServices(repositories) {
         logger.createComponentLogger('REEApiService')
     );
 
-    // Servicio de balance eléctrico
     const electricBalanceService = new ElectricBalanceService(
         repositories.electricBalanceRepository
     );
 
-    // Instancia de conexión MongoDB para health checks
     const mongoConnection = MongoConnection;
 
     logger.debug('Services initialized');
@@ -424,20 +404,15 @@ async function setupGraphQLServer(repositories, services) {
     logger.info('Setting up GraphQL server');
 
     try {
-        // Crear un router Express específico para GraphQL
         const graphqlRouter = express.Router();
 
-        // Asegurar path correcto
         const graphqlPath = config.graphql.path || '/graphql';
         console.log(`[GRAPHQL] Configurando con path: '${graphqlPath}'`);
 
-        // Configuración CORS
         const graphqlCorsOptions = getCorsOptions();
 
-        // Aplicar CORS específico al router de GraphQL
         graphqlRouter.use(cors(graphqlCorsOptions));
 
-        // Crear servidor GraphQL
         const graphqlServer = createGraphQLServer({
             repositories,
             services,
@@ -451,18 +426,14 @@ async function setupGraphQLServer(repositories, services) {
             expressApp: app
         });
 
-        // Iniciar servidor GraphQL
         await graphqlServer.start();
 
-        // Aplicar middleware solo al router específico de GraphQL, no a toda la app
         graphqlServer.server.applyMiddleware({
-            app: graphqlRouter, // Usar el router específico en lugar de app
-            path: '/', // Path relativo al router
+            app: graphqlRouter,
+            path: '/',
             cors: graphqlCorsOptions
         });
 
-        // Montar el router en la ruta específica de la app principal
-        // Esto es clave: solo se aplica a esta ruta específica
         app.use(graphqlPath, graphqlRouter);
 
         logger.info(`GraphQL server ready at ${graphqlPath}`);
@@ -486,11 +457,9 @@ async function initializeSchedulers(services, repositories) {
     logger.info('Initializing scheduled tasks');
 
     try {
-        // Inyectar dependencias
         schedulerManager.services = services;
         schedulerManager.repositories = repositories;
 
-        // Inicializar tareas programadas
         await schedulerManager.initialize();
 
         initializedServices.push({ name: 'Scheduler Manager', instance: schedulerManager });
@@ -499,7 +468,6 @@ async function initializeSchedulers(services, repositories) {
 
     } catch (error) {
         logger.error(`Failed to initialize schedulers: ${error.message}`, error);
-        // No abortamos el inicio de la aplicación por un error en las tareas programadas
         logger.warn('Continuing application startup despite scheduler initialization failure');
     }
 }
@@ -517,12 +485,10 @@ function setupGracefulShutdown(httpServer) {
         process.on(signal, async () => {
             logger.info(`${signal} signal received. Starting graceful shutdown...`);
 
-            // Detener el servidor HTTP
             httpServer.close(() => {
                 logger.info('HTTP server closed');
             });
 
-            // Detener servicios en orden inverso
             for (const service of [...initializedServices].reverse()) {
                 logger.info(`Shutting down ${service.name}...`);
 
@@ -546,10 +512,8 @@ function setupGracefulShutdown(httpServer) {
         });
     });
 
-    // Manejar errores no capturados
     process.on('uncaughtException', (error) => {
         logger.error('Uncaught exception', error);
-        // No salimos inmediatamente para permitir logging y limpieza
         setTimeout(() => {
             process.exit(1);
         }, 1000);
@@ -557,7 +521,6 @@ function setupGracefulShutdown(httpServer) {
 
     process.on('unhandledRejection', (reason, promise) => {
         logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
-        // No salimos para permitir que la aplicación continúe
     });
 
     logger.debug('Graceful shutdown handlers configured');

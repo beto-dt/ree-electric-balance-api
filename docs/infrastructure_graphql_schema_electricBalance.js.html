@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: infrastructure/graphql/schema/electricBalance.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: infrastructure/graphql/schema/electricBalance.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>
+/**
+ * @file electricBalance.js
+ * @description Definición del esquema GraphQL para balance eléctrico
+ *
+ * Este archivo contiene las definiciones de tipos, queries y resolvers
+ * para el balance eléctrico en el esquema GraphQL.
+ */
+
+const { gql } = require('apollo-server-express');
+
+const electricBalanceSchema = gql`
+    """
+    Tipo que representa un ítem de generación, demanda o intercambio eléctrico
+    """
+    type BalanceItem {
+        """Tipo de generación/demanda/intercambio"""
+        type: String!
+        """Valor en MW"""
+        value: Float!
+        """Porcentaje respecto al total"""
+        percentage: Float
+        """Color para visualización (opcional)"""
+        color: String
+        """Unidad de medida"""
+        unit: String
+    }
+
+    """
+    Tipo que representa un balance eléctrico completo
+    """
+    type ElectricBalance {
+        """Identificador único"""
+        id: ID!
+        """Fecha y hora a la que corresponden los datos"""
+        timestamp: DateTime!
+        """Alcance temporal (hour, day, month, year)"""
+        timeScope: String!
+        """Datos de generación por tipo"""
+        generation: [BalanceItem!]!
+        """Datos de demanda"""
+        demand: [BalanceItem!]!
+        """Datos de intercambios internacionales"""
+        interchange: [BalanceItem!]!
+        """Total de generación en MW"""
+        totalGeneration: Float
+        """Total de demanda en MW"""
+        totalDemand: Float!
+        """Balance entre generación y demanda"""
+        balance: Float!
+        """Porcentaje de generación renovable"""
+        renewablePercentage: Float!
+        """Metadatos adicionales"""
+        metadata: JSONObject
+        """Fecha de creación del registro"""
+        createdAt: DateTime
+        """Fecha de última actualización del registro"""
+        updatedAt: DateTime
+    }
+
+    """
+    Tipo para estadísticas de un indicador específico
+    """
+    type IndicatorStats {
+        """Valor promedio"""
+        average: Float!
+        """Valor máximo"""
+        max: Float!
+        """Valor mínimo"""
+        min: Float!
+    }
+
+    """
+    Tipo para estadísticas agregadas de balance eléctrico
+    """
+    type ElectricBalanceStats {
+        """Estadísticas de generación"""
+        generation: IndicatorStats!
+        """Estadísticas de demanda"""
+        demand: IndicatorStats!
+        """Estadísticas de porcentaje renovable"""
+        renewablePercentage: IndicatorStats!
+        """Número de registros analizados"""
+        count: Int!
+        """Fecha de inicio del período"""
+        startDate: DateTime!
+        """Fecha de fin del período"""
+        endDate: DateTime!
+        """Alcance temporal (hour, day, month, year)"""
+        timeScope: String!
+    }
+
+    """
+    Tipo para distribución de generación por tipo
+    """
+    type GenerationDistribution {
+        """Tipo de generación"""
+        type: String!
+        """Valor total acumulado"""
+        totalValue: Float!
+        """Valor promedio"""
+        avgValue: Float!
+        """Valor máximo"""
+        maxValue: Float!
+        """Valor mínimo"""
+        minValue: Float!
+        """Porcentaje respecto al total"""
+        percentage: Float!
+        """Color para visualización"""
+        color: String
+        """Número de registros"""
+        count: Int!
+    }
+
+    """
+    Tipo para datos de series temporales
+    """
+    type TimeSeriesPoint {
+        """Fecha y hora del punto"""
+        timestamp: DateTime!
+        """Valor del punto"""
+        value: Float!
+    }
+
+    """
+    Tipo para datos de análisis de balance eléctrico
+    """
+    type ElectricBalanceAnalysis {
+        """Estadísticas del período"""
+        stats: ElectricBalanceStats!
+        """Distribución de generación por tipo"""
+        generationDistribution: [GenerationDistribution!]!
+        """Series temporales de generación total"""
+        generationSeries: [TimeSeriesPoint!]!
+        """Series temporales de demanda total"""
+        demandSeries: [TimeSeriesPoint!]!
+        """Series temporales de porcentaje renovable"""
+        renewableSeries: [TimeSeriesPoint!]!
+        """Series temporales de balance (generación - demanda)"""
+        balanceSeries: [TimeSeriesPoint!]!
+        """Tendencias detectadas"""
+        trends: JSONObject
+        """Período analizado"""
+        period: JSONObject!
+    }
+
+    """
+    Tipo para resultados paginados de balance eléctrico
+    """
+    type ElectricBalancePaginatedResult {
+        """Lista de balances eléctricos"""
+        items: [ElectricBalance!]!
+        """Número total de registros"""
+        totalCount: Int!
+        """Página actual"""
+        page: Int!
+        """Registros por página"""
+        pageSize: Int!
+        """Indica si hay página anterior"""
+        hasPreviousPage: Boolean!
+        """Indica si hay página siguiente"""
+        hasNextPage: Boolean!
+    }
+
+    """
+    Input para filtros de fecha
+    """
+    input DateRangeInput {
+        """Fecha de inicio"""
+        startDate: DateTime!
+        """Fecha de fin"""
+        endDate: DateTime!
+        """Alcance temporal (hour, day, month, year)"""
+        timeScope: String = "day"
+    }
+
+    """
+    Input para opciones de paginación
+    """
+    input PaginationInput {
+        """Página a recuperar (empieza en 1)"""
+        page: Int = 1
+        """Registros por página"""
+        pageSize: Int = 20
+        """Campo por el que ordenar"""
+        orderBy: String = "timestamp"
+        """Dirección de ordenación (ASC o DESC)"""
+        orderDirection: String = "ASC"
+    }
+
+    """
+    Input para filtros específicos de balance eléctrico
+    """
+    input ElectricBalanceFilterInput {
+        """Filtro de renovables (porcentaje mínimo)"""
+        minRenewablePercentage: Float
+        """Filtro por tipo de generación"""
+        generationType: String
+        """Filtro por valor mínimo de generación total"""
+        minTotalGeneration: Float
+        """Filtro por valor máximo de generación total"""
+        maxTotalGeneration: Float
+        """Filtro por valor mínimo de demanda total"""
+        minTotalDemand: Float
+        """Filtro por valor máximo de demanda total"""
+        maxTotalDemand: Float
+    }
+
+    """
+    Input para opciones de análisis
+    """
+    input AnalysisOptionsInput {
+        """Incluir detección de patrones"""
+        includePatterns: Boolean = false
+        """Incluir métricas de sostenibilidad"""
+        includeSustainability: Boolean = false
+        """Incluir datos de periodicidad"""
+        includePeriodicity: Boolean = false
+    }
+
+    """
+    Input para comparación de períodos
+    """
+    input ComparePeriodInput {
+        """Fecha de inicio del período actual"""
+        currentStartDate: DateTime!
+        """Fecha de fin del período actual"""
+        currentEndDate: DateTime!
+        """Fecha de inicio del período anterior"""
+        previousStartDate: DateTime!
+        """Fecha de fin del período anterior"""
+        previousEndDate: DateTime!
+        """Alcance temporal"""
+        timeScope: String = "day"
+    }
+
+    extend type Query {
+        """
+        Obtiene un balance eléctrico por su ID
+        """
+        electricBalance(id: ID!): ElectricBalance
+
+        """
+        Obtiene balances eléctricos por rango de fechas
+        """
+        electricBalanceByDateRange(
+            dateRange: DateRangeInput!,
+            pagination: PaginationInput,
+            filters: ElectricBalanceFilterInput
+        ): ElectricBalancePaginatedResult!
+
+        """
+        Obtiene estadísticas de balance eléctrico por rango de fechas
+        """
+        electricBalanceStats(dateRange: DateRangeInput!): ElectricBalanceStats!
+
+        """
+        Obtiene distribución de generación por tipo para un rango de fechas
+        """
+        generationDistribution(dateRange: DateRangeInput!): [GenerationDistribution!]!
+
+        """
+        Obtiene series temporales para un indicador específico
+        """
+        electricBalanceTimeSeries(
+            dateRange: DateRangeInput!,
+            indicator: String!
+        ): [TimeSeriesPoint!]!
+
+        """
+        Obtiene análisis completo de balance eléctrico para un rango de fechas
+        """
+        electricBalanceAnalysis(
+            dateRange: DateRangeInput!,
+            options: AnalysisOptionsInput
+        ): ElectricBalanceAnalysis!
+
+        """
+        Compara dos períodos de balance eléctrico
+        """
+        compareElectricBalancePeriods(
+            periods: ComparePeriodInput!
+        ): JSONObject!
+
+        """
+        Obtiene el balance eléctrico más reciente
+        """
+        latestElectricBalance: ElectricBalance
+    }
+
+    extend type Mutation {
+        """
+        Refresca los datos de balance eléctrico para un rango de fechas
+        """
+        refreshElectricBalanceData(
+            dateRange: DateRangeInput!,
+            forceUpdate: Boolean = false
+        ): JSONObject!
+    }
+`;
+
+module.exports = electricBalanceSchema;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="ApiRequestError.html">ApiRequestError</a></li><li><a href="ApiResponseError.html">ApiResponseError</a></li><li><a href="ApplicationError.html">ApplicationError</a></li><li><a href="BusinessRuleViolationError.html">BusinessRuleViolationError</a></li><li><a href="ConfigurationError.html">ConfigurationError</a></li><li><a href="DuplicateDataError.html">DuplicateDataError</a></li><li><a href="ElectricBalance.html">ElectricBalance</a></li><li><a href="ElectricBalanceController.html">ElectricBalanceController</a></li><li><a href="ExternalResourceError.html">ExternalResourceError</a></li><li><a href="FetchREEData.html">FetchREEData</a></li><li><a href="GetElectricBalanceByDateRange.html">GetElectricBalanceByDateRange</a></li><li><a href="InvalidDataError.html">InvalidDataError</a></li><li><a href="InvalidDateRangeError.html">InvalidDateRangeError</a></li><li><a href="MongoElectricBalanceRepository.html">MongoElectricBalanceRepository</a></li><li><a href="NetworkError.html">NetworkError</a></li><li><a href="NotAuthorizedError.html">NotAuthorizedError</a></li><li><a href="NotFoundError.html">NotFoundError</a></li><li><a href="REEApiService.html">REEApiService</a></li><li><a href="REEDataFetcher.html">REEDataFetcher</a></li><li><a href="RepositoryError.html">RepositoryError</a></li><li><a href="SchedulerManager.html">SchedulerManager</a></li><li><a href="ValidationError.html">ValidationError</a></li></ul><h3>Global</h3><ul><li><a href="global.html#MongoConnection">MongoConnection</a></li><li><a href="global.html#balanceItemSchema">balanceItemSchema</a></li><li><a href="global.html#bootstrap">bootstrap</a></li><li><a href="global.html#compareDatesIgnoringTime">compareDatesIgnoringTime</a></li><li><a href="global.html#config">config</a></li><li><a href="global.html#connectToDatabase">connectToDatabase</a></li><li><a href="global.html#createComponentLogger">createComponentLogger</a></li><li><a href="global.html#createGraphQLLogger">createGraphQLLogger</a></li><li><a href="global.html#createGraphQLServer">createGraphQLServer</a></li><li><a href="global.html#createTransports">createTransports</a></li><li><a href="global.html#determineMongoErrorCode">determineMongoErrorCode</a></li><li><a href="global.html#determineTimeScope">determineTimeScope</a></li><li><a href="global.html#electricBalanceResolvers">electricBalanceResolvers</a></li><li><a href="global.html#electricBalanceSchema">electricBalanceSchema</a></li><li><a href="global.html#errorLogger">errorLogger</a></li><li><a href="global.html#errorMiddleware">errorMiddleware</a></li><li><a href="global.html#extendWithLogger">extendWithLogger</a></li><li><a href="global.html#formatDate">formatDate</a></li><li><a href="global.html#formatDateForREEApi">formatDateForREEApi</a></li><li><a href="global.html#formatDateForUI">formatDateForUI</a></li><li><a href="global.html#formatDateISO">formatDateISO</a></li><li><a href="global.html#getDateRangeForPeriod">getDateRangeForPeriod</a></li><li><a href="global.html#getEnv">getEnv</a></li><li><a href="global.html#getErrorCodeFromType">getErrorCodeFromType</a></li><li><a href="global.html#getHttpStatusFromError">getHttpStatusFromError</a></li><li><a href="global.html#getMostRecentDate">getMostRecentDate</a></li><li><a href="global.html#handleApiError">handleApiError</a></li><li><a href="global.html#handleDatabaseError">handleDatabaseError</a></li><li><a href="global.html#handleError">handleError</a></li><li><a href="global.html#handleREEApiError">handleREEApiError</a></li><li><a href="global.html#handleValidationError">handleValidationError</a></li><li><a href="global.html#initializeRepositories">initializeRepositories</a></li><li><a href="global.html#initializeSchedulers">initializeSchedulers</a></li><li><a href="global.html#initializeServices">initializeServices</a></li><li><a href="global.html#logFormats">logFormats</a></li><li><a href="global.html#logger">logger</a></li><li><a href="global.html#mapErrorToGraphQLError">mapErrorToGraphQLError</a></li><li><a href="global.html#parseDate">parseDate</a></li><li><a href="global.html#requestLogger">requestLogger</a></li><li><a href="global.html#setupBasicRoutes">setupBasicRoutes</a></li><li><a href="global.html#setupGracefulShutdown">setupGracefulShutdown</a></li><li><a href="global.html#setupGraphQLServer">setupGraphQLServer</a></li><li><a href="global.html#setupMiddlewares">setupMiddlewares</a></li><li><a href="global.html#toArray">toArray</a></li><li><a href="global.html#toBoolean">toBoolean</a></li><li><a href="global.html#toNumber">toNumber</a></li><li><a href="global.html#toObject">toObject</a></li><li><a href="global.html#tryListen">tryListen</a></li><li><a href="global.html#validateDateRange">validateDateRange</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Sun May 18 2025 01:47:36 GMT-0500 (Ecuador Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

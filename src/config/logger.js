@@ -23,7 +23,6 @@ if (config.logging.enableFile && !fs.existsSync(logDirectory)) {
  * Formatos predefinidos para el logger
  */
 const logFormats = {
-    // Formato detallado para consola en desarrollo
     developmentConsole: format.combine(
         format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
         format.colorize(),
@@ -36,7 +35,6 @@ const logFormats = {
         })
     ),
 
-    // Formato simple para consola en producción
     productionConsole: format.combine(
         format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         format.printf(info => {
@@ -48,7 +46,6 @@ const logFormats = {
         })
     ),
 
-    // Formato JSON para archivos y servicios externos
     json: format.combine(
         format.timestamp(),
         format.json()
@@ -61,7 +58,6 @@ const logFormats = {
 function createTransports() {
     const logTransports = [];
 
-    // Transporte de consola si está habilitado
     if (config.logging.enableConsole) {
         logTransports.push(
             new transports.Console({
@@ -73,7 +69,6 @@ function createTransports() {
         );
     }
 
-    // Transporte de archivo si está habilitado
     if (config.logging.enableFile) {
         logTransports.push(
             new transports.File({
@@ -86,7 +81,6 @@ function createTransports() {
             })
         );
 
-        // Archivo separado para errores
         logTransports.push(
             new transports.File({
                 filename: path.join(
@@ -120,8 +114,8 @@ const logger = createLogger({
         environment: config.env
     },
     transports: createTransports(),
-    exitOnError: false, // No salir por errores no controlados
-    silent: process.env.NODE_ENV === 'test' && !process.env.LOG_IN_TESTS // Silencioso en tests
+    exitOnError: false,
+    silent: process.env.NODE_ENV === 'test' && !process.env.LOG_IN_TESTS
 });
 
 /**
@@ -132,7 +126,6 @@ const logger = createLogger({
  * @param {Function} next - Función para continuar
  */
 function requestLogger(req, res, next) {
-    // Saltar logging para rutas excluidas
     if (config.logging.excludePaths.some(path => req.path.startsWith(path))) {
         return next();
     }
@@ -142,14 +135,11 @@ function requestLogger(req, res, next) {
         req.headers['x-correlation-id'] ||
         `req-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
-    // Añadir ID de petición para seguimiento
     req.requestId = requestId;
     res.setHeader('X-Request-ID', requestId);
 
-    // Añadir logger específico para esta petición
     req.logger = logger.child({ requestId });
 
-    // Loggear la petición
     req.logger.debug(`HTTP ${req.method} ${req.url}`, {
         method: req.method,
         url: req.url,
@@ -158,12 +148,10 @@ function requestLogger(req, res, next) {
         userAgent: req.headers['user-agent']
     });
 
-    // Capturar cuando se complete la respuesta
     res.on('finish', () => {
         const duration = Date.now() - start;
         const message = `HTTP ${req.method} ${req.url} ${res.statusCode} - ${duration}ms`;
 
-        // Usar nivel apropiado según el código de estado
         const level = res.statusCode >= 500 ? 'error' :
             res.statusCode >= 400 ? 'warn' :
                 'info';
@@ -202,7 +190,7 @@ function errorLogger(err, req, res, next) {
         query: req.query,
         body: req.body,
         ip: req.ip,
-        user: req.user // Si se usa autenticación
+        user: req.user
     });
 
     next(err);
@@ -260,7 +248,6 @@ function createGraphQLLogger(info) {
     });
 }
 
-// Exportar el logger y funciones auxiliares
 module.exports = extendWithLogger({
     requestLogger,
     errorLogger,

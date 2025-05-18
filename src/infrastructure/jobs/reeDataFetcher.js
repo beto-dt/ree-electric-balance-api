@@ -27,21 +27,19 @@ class REEDataFetcher {
         this.electricBalanceRepository = electricBalanceRepository;
         this.logger = logger;
         this.config = {
-            // Configuración por defecto
-            schedule: config.schedule || '0 */1 * * *', // Cada hora por defecto
+            schedule: config.schedule || '0 */1 * * *',
             timeScopes: config.timeScopes || ['hour', 'day'],
             enabled: config.enabled !== undefined ? config.enabled : true,
             initialFetch: config.initialFetch !== undefined ? config.initialFetch : true,
             retryOnFailure: config.retryOnFailure !== undefined ? config.retryOnFailure : true,
-            retryDelay: config.retryDelay || 5 * 60 * 1000, // 5 minutos
+            retryDelay: config.retryDelay || 5 * 60 * 1000,
             maxRetries: config.maxRetries || 3,
             forceUpdate: config.forceUpdate || false,
-            // Períodos históricos a obtener (en días)
             historicalPeriods: {
-                hour: config.historicalPeriods?.hour || 2, // 2 días de datos horarios
-                day: config.historicalPeriods?.day || 60, // 60 días de datos diarios
-                month: config.historicalPeriods?.month || 365, // 1 año de datos mensuales
-                year: config.historicalPeriods?.year || 1825 // 5 años de datos anuales
+                hour: config.historicalPeriods?.hour || 2,
+                day: config.historicalPeriods?.day || 60,
+                month: config.historicalPeriods?.month || 365,
+                year: config.historicalPeriods?.year || 1825
             }
         };
 
@@ -65,12 +63,10 @@ class REEDataFetcher {
         this.logger.info('Starting REE data fetcher');
 
         try {
-            // Realizar obtención inicial de datos históricos si está configurado
             if (this.config.initialFetch) {
                 await this._performInitialFetch();
             }
 
-            // Programar tareas periódicas para cada timeScope
             this._scheduleJobs();
 
             this.logger.info('REE data fetcher started successfully');
@@ -91,7 +87,6 @@ class REEDataFetcher {
 
         this.logger.info('Stopping REE data fetcher');
 
-        // Detener todas las tareas programadas
         this.jobs.forEach(job => job.stop());
         this.jobs = [];
         this.running = false;
@@ -149,7 +144,6 @@ class REEDataFetcher {
             lastFetchTime: this.lastFetchTime || null,
             config: {
                 ...this.config,
-                // No incluir información sensible
                 credentials: this.config.credentials ? '***' : undefined
             }
         };
@@ -160,7 +154,6 @@ class REEDataFetcher {
      * @private
      */
     _scheduleJobs() {
-        // Limpiar jobs existentes
         this.jobs.forEach(job => job.stop());
         this.jobs = [];
 
@@ -169,7 +162,6 @@ class REEDataFetcher {
             return;
         }
 
-        // Crear una tarea para cada timeScope
         this.config.timeScopes.forEach(timeScope => {
             const job = cron.schedule(this.config.schedule, async () => {
                 await this._executeScheduledFetch(timeScope);
@@ -197,10 +189,8 @@ class REEDataFetcher {
         try {
             this.fetchInProgress = true;
 
-            // Calcular período para la obtención según el timeScope
             const params = this._calculateFetchPeriod(timeScope);
 
-            // Ejecutar obtención
             const result = await this._fetchData({
                 ...params,
                 timeScope,
@@ -214,7 +204,6 @@ class REEDataFetcher {
         } catch (error) {
             this.logger.error(`Error in scheduled ${timeScope} fetch: ${error.message}`, error);
 
-            // Reintento si está configurado
             if (this.config.retryOnFailure && this.retryCount < this.config.maxRetries) {
                 this.retryCount++;
                 this._scheduleRetry(timeScope);
@@ -249,7 +238,6 @@ class REEDataFetcher {
 
         for (const timeScope of this.config.timeScopes) {
             try {
-                // Calcular período histórico según configuración
                 const daysToFetch = this.config.historicalPeriods[timeScope] || 30;
 
                 const endDate = new Date();
@@ -258,18 +246,16 @@ class REEDataFetcher {
 
                 this.logger.info(`Fetching historical ${timeScope} data from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
-                // Ejecutar obtención de datos históricos
                 await this._fetchData({
                     startDate,
                     endDate,
                     timeScope,
-                    forceUpdate: false // No forzar actualización para datos históricos
+                    forceUpdate: false
                 });
 
                 this.logger.info(`Historical ${timeScope} data fetch completed`);
             } catch (error) {
                 this.logger.error(`Error fetching historical ${timeScope} data: ${error.message}`, error);
-                // Continuar con el siguiente timeScope aunque haya error
             }
         }
     }
@@ -287,23 +273,18 @@ class REEDataFetcher {
 
         switch (timeScope) {
             case 'hour':
-                // Últimas 24 horas
                 startDate.setHours(startDate.getHours() - 24);
                 break;
             case 'day':
-                // Últimos 7 días
                 startDate.setDate(startDate.getDate() - 7);
                 break;
             case 'month':
-                // Últimos 3 meses
                 startDate.setMonth(startDate.getMonth() - 3);
                 break;
             case 'year':
-                // Último año
                 startDate.setFullYear(startDate.getFullYear() - 1);
                 break;
             default:
-                // Por defecto, último día
                 startDate.setDate(startDate.getDate() - 1);
         }
 
@@ -319,14 +300,12 @@ class REEDataFetcher {
      */
     async _fetchData(params) {
         try {
-            // Crear instancia del caso de uso
             const fetchREEDataUseCase = new FetchREEData(
                 this.reeApiService,
                 this.electricBalanceRepository,
                 this.logger
             );
 
-            // Ejecutar caso de uso
             const result = await fetchREEDataUseCase.execute({
                 startDate: params.startDate,
                 endDate: params.endDate,

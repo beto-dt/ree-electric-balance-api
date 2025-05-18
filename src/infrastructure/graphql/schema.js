@@ -96,10 +96,8 @@ const baseTypeDefs = gql`
     }
 `;
 
-// Definir resolvers base
 const baseResolvers = {
     Query: {
-        // Resolver para obtener información de la API
         apiInfo: () => ({
             name: 'REE Balance Eléctrico API',
             version: '1.0.0',
@@ -108,12 +106,9 @@ const baseResolvers = {
             lastUpdated: new Date()
         }),
 
-        // Resolver para obtener el estado del servidor
         serverStatus: async (_, __, { dataSources, services }) => {
-            // Verificar estado de la API de REE
             const reeApiStatus = await services.reeApiService.checkApiStatus();
 
-            // Verificar estado de la base de datos
             const dbStatus = await services.mongoConnection.healthCheck();
 
             return {
@@ -128,32 +123,25 @@ const baseResolvers = {
     },
 
     Mutation: {
-        // Resolver simple para verificar que las mutaciones funcionan
         ping: () => 'pong'
     }
 };
 
-// Combinar todos los esquemas
 const typeDefs = [
     baseTypeDefs,
     electricBalanceSchema
-    // Añadir aquí más esquemas a medida que se creen
 ];
 
-// Combinar todos los resolvers
 const resolvers = merge(
     baseResolvers,
     electricBalanceResolvers
-    // Añadir aquí más resolvers a medida que se creen
 );
 
-// Crear y exportar el esquema ejecutable
 const schema = makeExecutableSchema({
     typeDefs,
     resolvers
 });
 
-// Configuración para los mocks en desarrollo
 const configureMocks = (schema, preserveResolvers = true) => {
     if (process.env.NODE_ENV === 'development' && process.env.ENABLE_GRAPHQL_MOCKS === 'true') {
         const { addMocksToSchema } = require('@graphql-tools/mock');

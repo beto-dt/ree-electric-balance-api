@@ -38,34 +38,27 @@ class GetElectricBalanceByDateRange {
      * @throws {RepositoryError} - Si hay problemas con el repositorio
      */
     async execute({ startDate, endDate, timeScope = 'day', format = 'default', options = {} }) {
-        // Validar y parsear fechas
+
         const parsedStartDate = this._parseDate(startDate);
         const parsedEndDate = this._parseDate(endDate);
 
-        // Validar rango de fechas
         this._validateDateRange(parsedStartDate, parsedEndDate);
 
-        // Validar timeScope
         this._validateTimeScope(timeScope);
 
         try {
-            // Según el formato solicitado, devolvemos diferentes respuestas
             switch (format.toLowerCase()) {
                 case 'raw':
-                    // Datos crudos sin procesamiento adicional
                     return await this._getRawData(parsedStartDate, parsedEndDate, timeScope, options);
 
                 case 'analysis':
-                    // Análisis completo usando el servicio de dominio
                     return await this._getAnalysisData(parsedStartDate, parsedEndDate, timeScope, options);
 
                 case 'compact':
-                    // Versión simplificada con solo los datos esenciales
                     return await this._getCompactData(parsedStartDate, parsedEndDate, timeScope, options);
 
                 case 'default':
                 default:
-                    // Formato predeterminado con balance de detalles
                     return await this._getDefaultData(parsedStartDate, parsedEndDate, timeScope, options);
             }
         } catch (error) {
@@ -116,14 +109,12 @@ class GetElectricBalanceByDateRange {
      * @private
      */
     _validateDateRange(startDate, endDate) {
-        // Verificar que la fecha de inicio es anterior a la de fin
         if (startDate > endDate) {
             throw new InvalidDateRangeError(
                 'Start date must be before end date'
             );
         }
 
-        // Verificar que el rango no es excesivamente grande
         const diffInDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
 
         if (diffInDays > 366) {
@@ -132,7 +123,6 @@ class GetElectricBalanceByDateRange {
             );
         }
 
-        // Verificar que las fechas no son futuras
         const now = new Date();
         if (endDate > now) {
             throw new InvalidDateRangeError(
@@ -198,14 +188,12 @@ class GetElectricBalanceByDateRange {
      * @private
      */
     async _getAnalysisData(startDate, endDate, timeScope, options) {
-        // Utilizar el servicio de dominio para análisis completo
         const analysisResult = await this.electricBalanceService.analyzeBalanceDataByDateRange(
             startDate,
             endDate,
             timeScope
         );
 
-        // Si se solicitan patrones y anomalías, incluirlos
         if (options.includePatterns) {
             const patterns = await this.electricBalanceService.detectPatternsAndAnomalies(
                 startDate,
@@ -220,7 +208,6 @@ class GetElectricBalanceByDateRange {
             };
         }
 
-        // Si se solicitan métricas de sostenibilidad, incluirlas
         if (options.includeSustainability) {
             const sustainability = await this.electricBalanceService.calculateSustainabilityMetrics(
                 startDate,
@@ -255,7 +242,6 @@ class GetElectricBalanceByDateRange {
             options
         );
 
-        // Transformar a formato compacto (solo los campos esenciales)
         const compactData = balanceData.map(balance => ({
             id: balance.id,
             timestamp: balance.timestamp,
@@ -265,7 +251,6 @@ class GetElectricBalanceByDateRange {
             renewablePercentage: balance.getRenewablePercentage()
         }));
 
-        // Obtener distribución de generación si se solicita
         let generationDistribution = null;
         if (options.includeDistribution) {
             generationDistribution = await this.electricBalanceRepository.getGenerationDistribution(
@@ -305,7 +290,6 @@ class GetElectricBalanceByDateRange {
             options
         );
 
-        // Calcular totales y promedios
         let totalGeneration = 0;
         let totalDemand = 0;
         let totalRenewablePercentage = 0;
@@ -347,13 +331,11 @@ class GetElectricBalanceByDateRange {
             };
         });
 
-        // Calcular promedios
-        const count = balanceData.length || 1; // Evitar división por cero
+        const count = balanceData.length || 1;
         const averageGeneration = totalGeneration / count;
         const averageDemand = totalDemand / count;
         const averageRenewablePercentage = totalRenewablePercentage / count;
 
-        // Obtener la distribución de generación por tipo
         const generationByType = {};
 
         balanceData.forEach(balance => {
@@ -370,7 +352,6 @@ class GetElectricBalanceByDateRange {
             });
         });
 
-        // Calcular porcentajes de la distribución total
         const totalGen = Object.values(generationByType)
             .reduce((sum, type) => sum + type.total, 0);
 
@@ -379,7 +360,6 @@ class GetElectricBalanceByDateRange {
                 (generationByType[type].total / totalGen) * 100;
         });
 
-        // Preparar series temporales para gráficos
         const timeSeries = {
             generation: formattedData.map(item => ({
                 timestamp: item.timestamp,

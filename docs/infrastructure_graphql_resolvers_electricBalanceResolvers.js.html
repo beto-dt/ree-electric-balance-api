@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: infrastructure/graphql/resolvers/electricBalanceResolvers.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: infrastructure/graphql/resolvers/electricBalanceResolvers.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>
+/**
+ * @file electricBalanceResolvers.js
+ * @description Resolvers de GraphQL para el balance eléctrico
+ *
+ * Este archivo implementa los resolvers para las queries y mutaciones
+ * relacionadas con el balance eléctrico, conectando el esquema GraphQL
+ * con los casos de uso de la aplicación.
+ */
+
+const { GraphQLScalarType } = require('graphql');
+const { Kind } = require('graphql/language');
+const { UserInputError, ApolloError } = require('apollo-server-express');
+
+const GetElectricBalanceByDateRange = require('../../../application/use-cases/GetElectricBalanceByDateRange');
+const FetchREEData = require('../../../application/use-cases/FetchREEData');
+
+const {
+    InvalidDateRangeError,
+    ApiRequestError,
+    ApiResponseError,
+    RepositoryError,
+    NotFoundError
+} = require('../../../application/errors/ApplicationErrors');
+
+/**
+ * Mapeo de errores de aplicación a errores de Apollo GraphQL
+ *
+ * @param {Error} error - Error original
+ * @returns {Error} - Error apropiado para GraphQL
+ */
+const mapErrorToGraphQLError = (error) => {
+    if (error instanceof InvalidDateRangeError) {
+        return new UserInputError(error.message, {
+            validationErrors: error.validationErrors
+        });
+    }
+
+    if (error instanceof ApiRequestError || error instanceof ApiResponseError) {
+        return new ApolloError(
+            error.message,
+            'EXTERNAL_API_ERROR',
+            { originalError: error.toJSON() }
+        );
+    }
+
+    if (error instanceof RepositoryError) {
+        return new ApolloError(
+            error.message,
+            'DATABASE_ERROR',
+            { originalError: error.toJSON() }
+        );
+    }
+
+    if (error instanceof NotFoundError) {
+        return new ApolloError(
+            error.message,
+            'NOT_FOUND',
+            { originalError: error.toJSON() }
+        );
+    }
+
+    return new ApolloError(
+        error.message,
+        'INTERNAL_SERVER_ERROR',
+        { stack: error.stack }
+    );
+};
+
+const DateTimeScalar = new GraphQLScalarType({
+    name: 'DateTime',
+    description: 'Fecha y hora en formato ISO 8601',
+    serialize(value) {
+        return value instanceof Date ? value.toISOString() : value;
+    },
+    parseValue(value) {
+        return new Date(value);
+    },
+    parseLiteral(ast) {
+        if (ast.kind === Kind.STRING) {
+            return new Date(ast.value);
+        }
+        return null;
+    },
+});
+
+const JSONObjectScalar = new GraphQLScalarType({
+    name: 'JSONObject',
+    description: 'Objeto JSON arbitrario',
+    serialize(value) {
+        return value;
+    },
+    parseValue(value) {
+        return value;
+    },
+    parseLiteral(ast) {
+        switch (ast.kind) {
+            case Kind.STRING:
+                return JSON.parse(ast.value);
+            case Kind.OBJECT:
+                return ast.fields.reduce((obj, field) => {
+                    obj[field.name.value] = parseLiteral(field.value);
+                    return obj;
+                }, {});
+            default:
+                return null;
+        }
+    },
+});
+
+/**
+ * Resolvers para el balance eléctrico
+ */
+const electricBalanceResolvers = {
+    DateTime: DateTimeScalar,
+    JSONObject: JSONObjectScalar,
+    ElectricBalance: {
+        totalGeneration: (parent) => {
+            return parent.totalGeneration === null || parent.totalGeneration === undefined ? 0 : parent.totalGeneration;
+        },
+        totalDemand: (parent) => {
+            return parent.totalDemand === null || parent.totalDemand === undefined ? 0 : parent.totalDemand;
+        },
+        balance: (parent) => {
+            return parent.balance === null || parent.balance === undefined ? 0 : parent.balance;
+        },
+        renewablePercentage: (parent) => {
+            return parent.renewablePercentage === null || parent.renewablePercentage === undefined ? 0 : parent.renewablePercentage;
+        }
+    },
+
+    // Queries
+    Query: {
+        /**
+         * Obtiene un balance eléctrico por su ID
+         */
+        electricBalance: async (_, { id }, { dataSources, repositories, logger }) => {
+            try {
+                const electricBalance = await repositories.electricBalanceRepository.findById(id);
+
+                if (!electricBalance) {
+                    throw new NotFoundError(
+                        `Electric balance with ID ${id} not found`,
+                        { resourceType: 'ElectricBalance', resourceId: id }
+                    );
+                }
+
+                return electricBalance;
+            } catch (error) {
+                logger.error(`Error fetching electric balance by ID: ${error.message}`, error);
+                throw mapErrorToGraphQLError(error);
+            }
+        },
+
+        /**
+         * Obtiene balances eléctricos por rango de fechas con paginación y filtros
+         */
+        electricBalanceByDateRange: async (_, { dateRange, pagination = {}, filters = {} }, { dataSources, repositories, services, logger }) => {
+            try {
+                // Instanciar el caso de uso
+                const getElectricBalanceUseCase = new GetElectricBalanceByDateRange(
+                    repositories.electricBalanceRepository,
+                    services.electricBalanceService
+                );
+
+                // Convertir entrada GraphQL a parámetros del caso de uso
+                const paginationOptions = {
+                    page: pagination.page || 1,
+                    limit: pagination.pageSize || 20,
+                    sort: {}
+                };
+
+                // Configurar ordenación
+                if (pagination.orderBy) {
+                    paginationOptions.sort[pagination.orderBy] =
+                        pagination.orderDirection === 'DESC' ? -1 : 1;
+                }
+
+                // Preparar filtros adicionales
+                const additionalFilters = {};
+
+                if (filters.minRenewablePercentage) {
+                    additionalFilters.renewablePercentage = { $gte: filters.minRenewablePercentage };
+                }
+
+                if (filters.generationType) {
+                    additionalFilters['generation.type'] = filters.generationType;
+                }
+
+                if (filters.minTotalGeneration) {
+                    additionalFilters.totalGeneration = {
+                        ...(additionalFilters.totalGeneration || {}),
+                        $gte: filters.minTotalGeneration
+                    };
+                }
+
+                if (filters.maxTotalGeneration) {
+                    additionalFilters.totalGeneration = {
+                        ...(additionalFilters.totalGeneration || {}),
+                        $lte: filters.maxTotalGeneration
+                    };
+                }
+
+                if (filters.minTotalDemand) {
+                    additionalFilters.totalDemand = {
+                        ...(additionalFilters.totalDemand || {}),
+                        $gte: filters.minTotalDemand
+                    };
+                }
+
+                if (filters.maxTotalDemand) {
+                    additionalFilters.totalDemand = {
+                        ...(additionalFilters.totalDemand || {}),
+                        $lte: filters.maxTotalDemand
+                    };
+                }
+
+                // Ejecutar caso de uso
+                const options = {
+                    ...paginationOptions,
+                    filters: additionalFilters
+                };
+
+                const result = await getElectricBalanceUseCase.execute({
+                    startDate: dateRange.startDate,
+                    endDate: dateRange.endDate,
+                    timeScope: dateRange.timeScope || 'day',
+                    format: 'default',
+                    options
+                });
+
+                // Obtener cuenta total para paginación
+                const totalCount = await repositories.electricBalanceRepository.findByDateRange(
+                    dateRange.startDate,
+                    dateRange.endDate,
+                    dateRange.timeScope || 'day',
+                    { onlyCount: true }
+                );
+
+                // Preparar respuesta paginada
+                return {
+                    items: result.data,
+                    totalCount: totalCount.count,
+                    page: paginationOptions.page,
+                    pageSize: paginationOptions.limit,
+                    hasPreviousPage: paginationOptions.page > 1,
+                    hasNextPage: paginationOptions.page * paginationOptions.limit &lt; totalCount.count
+                };
+            } catch (error) {
+                logger.error(`Error fetching electric balance by date range: ${error.message}`, error);
+                throw mapErrorToGraphQLError(error);
+            }
+        },
+
+        /**
+         * Obtiene estadísticas de balance eléctrico por rango de fechas
+         */
+        electricBalanceStats: async (_, { dateRange }, { repositories, logger }) => {
+            try {
+                const stats = await repositories.electricBalanceRepository.getStatsByDateRange(
+                    dateRange.startDate,
+                    dateRange.endDate,
+                    dateRange.timeScope || 'day'
+                );
+
+                if (!stats || !stats.stats) {
+                    throw new Error('No statistics available for the specified date range');
+                }
+
+                return {
+                    generation: stats.stats.generation,
+                    demand: stats.stats.demand,
+                    renewablePercentage: stats.stats.renewablePercentage,
+                    count: stats.count,
+                    startDate: dateRange.startDate,
+                    endDate: dateRange.endDate,
+                    timeScope: dateRange.timeScope || 'day'
+                };
+            } catch (error) {
+                logger.error(`Error fetching electric balance stats: ${error.message}`, error);
+                throw mapErrorToGraphQLError(error);
+            }
+        },
+
+        /**
+         * Obtiene distribución de generación por tipo para un rango de fechas
+         */
+        generationDistribution: async (_, { dateRange }, { repositories, logger }) => {
+            try {
+                const distribution = await repositories.electricBalanceRepository.getGenerationDistribution(
+                    dateRange.startDate,
+                    dateRange.endDate,
+                    dateRange.timeScope || 'day'
+                );
+
+                return distribution;
+            } catch (error) {
+                logger.error(`Error fetching generation distribution: ${error.message}`, error);
+                throw mapErrorToGraphQLError(error);
+            }
+        },
+
+        /**
+         * Obtiene series temporales para un indicador específico
+         */
+        electricBalanceTimeSeries: async (_, { dateRange, indicator }, { repositories, logger }) => {
+            try {
+                // Validar indicador permitido
+                const allowedIndicators = [
+                    'totalGeneration', 'totalDemand', 'balance', 'renewablePercentage'
+                ];
+
+                if (!allowedIndicators.includes(indicator)) {
+                    throw new UserInputError(
+                        `Invalid indicator: ${indicator}. Allowed values: ${allowedIndicators.join(', ')}`
+                    );
+                }
+
+                const timeSeries = await repositories.electricBalanceRepository.getTimeSeriesForIndicator(
+                    indicator,
+                    dateRange.startDate,
+                    dateRange.endDate,
+                    dateRange.timeScope || 'day'
+                );
+
+                return timeSeries;
+            } catch (error) {
+                logger.error(`Error fetching time series: ${error.message}`, error);
+                throw mapErrorToGraphQLError(error);
+            }
+        },
+
+        /**
+         * Obtiene análisis completo de balance eléctrico para un rango de fechas
+         */
+        electricBalanceAnalysis: async (_, { dateRange, options = {} }, { repositories, services, logger }) => {
+            try {
+                // Obtener estadísticas
+                const stats = await repositories.electricBalanceRepository.getStatsByDateRange(
+                    dateRange.startDate,
+                    dateRange.endDate,
+                    dateRange.timeScope || 'day'
+                );
+
+                // Obtener distribución de generación
+                const generationDistribution = await repositories.electricBalanceRepository.getGenerationDistribution(
+                    dateRange.startDate,
+                    dateRange.endDate,
+                    dateRange.timeScope || 'day'
+                );
+
+                // Obtener series temporales para indicadores clave
+                const [generationSeries, demandSeries, renewableSeries, balanceSeries] = await Promise.all([
+                    repositories.electricBalanceRepository.getTimeSeriesForIndicator(
+                        'totalGeneration', dateRange.startDate, dateRange.endDate, dateRange.timeScope || 'day'
+                    ),
+                    repositories.electricBalanceRepository.getTimeSeriesForIndicator(
+                        'totalDemand', dateRange.startDate, dateRange.endDate, dateRange.timeScope || 'day'
+                    ),
+                    repositories.electricBalanceRepository.getTimeSeriesForIndicator(
+                        'renewablePercentage', dateRange.startDate, dateRange.endDate, dateRange.timeScope || 'day'
+                    ),
+                    repositories.electricBalanceRepository.getTimeSeriesForIndicator(
+                        'balance', dateRange.startDate, dateRange.endDate, dateRange.timeScope || 'day'
+                    )
+                ]);
+
+                // Obtener datos adicionales opcionales
+                let trends = null;
+                let sustainability = null;
+
+                if (options.includePatterns) {
+                    trends = await services.electricBalanceService.detectPatternsAndAnomalies(
+                        dateRange.startDate,
+                        dateRange.endDate,
+                        dateRange.timeScope || 'day'
+                    );
+                }
+
+                if (options.includeSustainability) {
+                    sustainability = await services.electricBalanceService.calculateSustainabilityMetrics(
+                        dateRange.startDate,
+                        dateRange.endDate,
+                        dateRange.timeScope || 'day'
+                    );
+                }
+
+                // Construir respuesta completa
+                return {
+                    stats: {
+                        generation: stats.stats.generation,
+                        demand: stats.stats.demand,
+                        renewablePercentage: stats.stats.renewablePercentage,
+                        count: stats.count,
+                        startDate: dateRange.startDate,
+                        endDate: dateRange.endDate,
+                        timeScope: dateRange.timeScope || 'day'
+                    },
+                    generationDistribution,
+                    generationSeries,
+                    demandSeries,
+                    renewableSeries,
+                    balanceSeries,
+                    trends: trends ? trends.patterns : null,
+                    period: {
+                        startDate: dateRange.startDate,
+                        endDate: dateRange.endDate,
+                        timeScope: dateRange.timeScope || 'day',
+                        recordCount: stats.count
+                    },
+                    ...(sustainability ? { sustainability: sustainability.metrics } : {})
+                };
+            } catch (error) {
+                logger.error(`Error generating electric balance analysis: ${error.message}`, error);
+                throw mapErrorToGraphQLError(error);
+            }
+        },
+
+        /**
+         * Compara dos períodos de balance eléctrico
+         */
+        compareElectricBalancePeriods: async (_, { periods }, { services, logger }) => {
+            try {
+                const comparisonResult = await services.electricBalanceService.comparePeriods(
+                    periods.currentStartDate,
+                    periods.currentEndDate,
+                    periods.previousStartDate,
+                    periods.previousEndDate,
+                    periods.timeScope || 'day'
+                );
+
+                return comparisonResult;
+            } catch (error) {
+                logger.error(`Error comparing electric balance periods: ${error.message}`, error);
+                throw mapErrorToGraphQLError(error);
+            }
+        },
+
+        /**
+         * Obtiene el balance eléctrico más reciente
+         */
+        latestElectricBalance: async (_, __, { repositories, logger }) => {
+            try {
+                const latestBalance = await repositories.electricBalanceRepository.findMostRecent();
+
+                // Si no hay balances, devuelve null (esto es aceptable a nivel de objeto)
+                if (!latestBalance) {
+                    return null;
+                }
+
+                // Verificar y garantizar que los campos no-nulos tienen valores válidos
+                if (latestBalance.getTotalGeneration() === null ||
+                  latestBalance.getTotalGeneration() === undefined) {
+                    // Actualizar el objeto antes de devolverlo
+                    latestBalance.totalGeneration = 0;
+                }
+
+                return latestBalance;
+            } catch (error) {
+                logger.error(`Error fetching latest electric balance: ${error.message}`, error);
+                throw mapErrorToGraphQLError(error);
+            }
+        }
+    },
+
+    // Mutaciones
+    Mutation: {
+        /**
+         * Refresca los datos de balance eléctrico para un rango de fechas
+         */
+        refreshElectricBalanceData: async (_, { dateRange, forceUpdate }, { dataSources, services, repositories, logger }) => {
+            try {
+                // Verificar permisos (simplificado - en producción se implementaría autenticación)
+
+                // Crear instancia del caso de uso
+                const fetchREEDataUseCase = new FetchREEData(
+                    services.reeApiService,
+                    repositories.electricBalanceRepository,
+                    logger
+                );
+
+                // Ejecutar caso de uso
+                const result = await fetchREEDataUseCase.execute({
+                    startDate: dateRange.startDate,
+                    endDate: dateRange.endDate,
+                    timeScope: dateRange.timeScope || 'day',
+                    forceUpdate
+                });
+
+                return {
+                    success: true,
+                    message: result.message,
+                    savedCount: result.savedCount,
+                    timeScope: result.timeScope,
+                    startDate: result.startDate,
+                    endDate: result.endDate,
+                    status: result.status
+                };
+            } catch (error) {
+                logger.error(`Error refreshing electric balance data: ${error.message}`, error);
+                throw mapErrorToGraphQLError(error);
+            }
+        }
+    }
+};
+
+module.exports = electricBalanceResolvers;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="ApiRequestError.html">ApiRequestError</a></li><li><a href="ApiResponseError.html">ApiResponseError</a></li><li><a href="ApplicationError.html">ApplicationError</a></li><li><a href="BusinessRuleViolationError.html">BusinessRuleViolationError</a></li><li><a href="ConfigurationError.html">ConfigurationError</a></li><li><a href="DuplicateDataError.html">DuplicateDataError</a></li><li><a href="ElectricBalance.html">ElectricBalance</a></li><li><a href="ElectricBalanceController.html">ElectricBalanceController</a></li><li><a href="ExternalResourceError.html">ExternalResourceError</a></li><li><a href="FetchREEData.html">FetchREEData</a></li><li><a href="GetElectricBalanceByDateRange.html">GetElectricBalanceByDateRange</a></li><li><a href="InvalidDataError.html">InvalidDataError</a></li><li><a href="InvalidDateRangeError.html">InvalidDateRangeError</a></li><li><a href="MongoElectricBalanceRepository.html">MongoElectricBalanceRepository</a></li><li><a href="NetworkError.html">NetworkError</a></li><li><a href="NotAuthorizedError.html">NotAuthorizedError</a></li><li><a href="NotFoundError.html">NotFoundError</a></li><li><a href="REEApiService.html">REEApiService</a></li><li><a href="REEDataFetcher.html">REEDataFetcher</a></li><li><a href="RepositoryError.html">RepositoryError</a></li><li><a href="SchedulerManager.html">SchedulerManager</a></li><li><a href="ValidationError.html">ValidationError</a></li></ul><h3>Global</h3><ul><li><a href="global.html#MongoConnection">MongoConnection</a></li><li><a href="global.html#balanceItemSchema">balanceItemSchema</a></li><li><a href="global.html#bootstrap">bootstrap</a></li><li><a href="global.html#compareDatesIgnoringTime">compareDatesIgnoringTime</a></li><li><a href="global.html#config">config</a></li><li><a href="global.html#connectToDatabase">connectToDatabase</a></li><li><a href="global.html#createComponentLogger">createComponentLogger</a></li><li><a href="global.html#createGraphQLLogger">createGraphQLLogger</a></li><li><a href="global.html#createGraphQLServer">createGraphQLServer</a></li><li><a href="global.html#createTransports">createTransports</a></li><li><a href="global.html#determineMongoErrorCode">determineMongoErrorCode</a></li><li><a href="global.html#determineTimeScope">determineTimeScope</a></li><li><a href="global.html#electricBalanceResolvers">electricBalanceResolvers</a></li><li><a href="global.html#electricBalanceSchema">electricBalanceSchema</a></li><li><a href="global.html#errorLogger">errorLogger</a></li><li><a href="global.html#errorMiddleware">errorMiddleware</a></li><li><a href="global.html#extendWithLogger">extendWithLogger</a></li><li><a href="global.html#formatDate">formatDate</a></li><li><a href="global.html#formatDateForREEApi">formatDateForREEApi</a></li><li><a href="global.html#formatDateForUI">formatDateForUI</a></li><li><a href="global.html#formatDateISO">formatDateISO</a></li><li><a href="global.html#getDateRangeForPeriod">getDateRangeForPeriod</a></li><li><a href="global.html#getEnv">getEnv</a></li><li><a href="global.html#getErrorCodeFromType">getErrorCodeFromType</a></li><li><a href="global.html#getHttpStatusFromError">getHttpStatusFromError</a></li><li><a href="global.html#getMostRecentDate">getMostRecentDate</a></li><li><a href="global.html#handleApiError">handleApiError</a></li><li><a href="global.html#handleDatabaseError">handleDatabaseError</a></li><li><a href="global.html#handleError">handleError</a></li><li><a href="global.html#handleREEApiError">handleREEApiError</a></li><li><a href="global.html#handleValidationError">handleValidationError</a></li><li><a href="global.html#initializeRepositories">initializeRepositories</a></li><li><a href="global.html#initializeSchedulers">initializeSchedulers</a></li><li><a href="global.html#initializeServices">initializeServices</a></li><li><a href="global.html#logFormats">logFormats</a></li><li><a href="global.html#logger">logger</a></li><li><a href="global.html#mapErrorToGraphQLError">mapErrorToGraphQLError</a></li><li><a href="global.html#parseDate">parseDate</a></li><li><a href="global.html#requestLogger">requestLogger</a></li><li><a href="global.html#setupBasicRoutes">setupBasicRoutes</a></li><li><a href="global.html#setupGracefulShutdown">setupGracefulShutdown</a></li><li><a href="global.html#setupGraphQLServer">setupGraphQLServer</a></li><li><a href="global.html#setupMiddlewares">setupMiddlewares</a></li><li><a href="global.html#toArray">toArray</a></li><li><a href="global.html#toBoolean">toBoolean</a></li><li><a href="global.html#toNumber">toNumber</a></li><li><a href="global.html#toObject">toObject</a></li><li><a href="global.html#tryListen">tryListen</a></li><li><a href="global.html#validateDateRange">validateDateRange</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Sun May 18 2025 01:47:36 GMT-0500 (Ecuador Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

@@ -97,21 +97,17 @@ class ElectricBalance {
      * @returns {number} - Total de generación en MW
      */
     getTotalGeneration() {
-        // Si no hay datos de generación, devolver 0
         if (!this.generation || !Array.isArray(this.generation) || this.generation.length === 0) {
             return 0;
         }
 
-        // Sumar los valores, convirtiendo explícitamente a número y manejando valores no válidos
         const total = this.generation.reduce((total, item) => {
-            // Verificar si item.value es un número válido
             const value = item && item.value !== undefined ?
               (Number.isFinite(parseFloat(item.value)) ? parseFloat(item.value) : 0)
               : 0;
             return total + value;
         }, 0);
 
-        // Asegurar que el resultado es un número finito
         return Number.isFinite(total) ? total : 0;
     }
 
@@ -159,7 +155,6 @@ class ElectricBalance {
 
         const totalGeneration = this.getTotalGeneration();
 
-        // Evitar división por cero
         if (totalGeneration > 0) {
             const percentage = (renewableGeneration / totalGeneration) * 100;
             return Number.isFinite(percentage) ? percentage : 0;
@@ -205,7 +200,6 @@ class ElectricBalance {
 
         const { data, included } = apiResponse;
 
-        // Obtener timestamp
         let timestamp;
         if (data.attributes?.datetime) {
             timestamp = data.attributes.datetime;
@@ -219,50 +213,39 @@ class ElectricBalance {
 
         const timeScope = data.attributes?.['time-trunc'] || 'day';
 
-        // Arrays para almacenar los datos
         const generation = [];
         const demand = [];
         const interchange = [];
 
-        // Nueva lógica para la estructura actualizada de la API
         if (included && Array.isArray(included)) {
-            // Mapeo de los nuevos tipos a las categorías correspondientes
             const generationTypes = ['Renovable', 'No-Renovable'];
             const demandTypes = ['Demanda'];
-            const interchangeTypes = ['Intercambios Internacionales']; // Podría no estar presente
-            const storageTypes = ['Almacenamiento']; // Categoría especial
+            const interchangeTypes = ['Intercambios Internacionales'];
+            const storageTypes = ['Almacenamiento'];
 
             for (const item of included) {
                 if (!item.type || !item.attributes || !item.attributes.content) {
                     continue;
                 }
 
-                // Procesar cada elemento según su tipo
                 if (generationTypes.includes(item.type)) {
-                    // Es un tipo de generación
                     for (const contentItem of item.attributes.content) {
                         if (!contentItem || !contentItem.type) continue;
 
-                        // Buscar valores en la estructura del contentItem
                         let value = 0;
                         let percentage = 0;
 
-                        // Intentar obtener valores desde diferentes ubicaciones
                         if (contentItem.attributes && contentItem.attributes.values && contentItem.attributes.values.length > 0) {
-                            // Si los valores están en attributes.values (estructura nueva)
                             const valueObj = contentItem.attributes.values[0];
                             value = parseFloat(valueObj.value || 0);
                             percentage = parseFloat(valueObj.percentage || 0);
                         } else if (contentItem.value !== undefined) {
-                            // Si los valores están directamente en el contentItem (estructura antigua)
                             value = parseFloat(contentItem.value || 0);
                             percentage = parseFloat(contentItem.percentage || 0);
                         }
 
-                        // Extraer color
                         const color = contentItem.attributes?.color || contentItem.color || null;
 
-                        // Añadir a la lista de generación
                         generation.push({
                             type: contentItem.type,
                             value: value,
@@ -273,30 +256,23 @@ class ElectricBalance {
                     }
                 }
                 else if (demandTypes.includes(item.type)) {
-                    // Es un tipo de demanda
                     for (const contentItem of item.attributes.content) {
                         if (!contentItem || !contentItem.type) continue;
 
-                        // Buscar valores en la estructura del contentItem
                         let value = 0;
                         let percentage = 0;
 
-                        // Intentar obtener valores desde diferentes ubicaciones
                         if (contentItem.attributes && contentItem.attributes.values && contentItem.attributes.values.length > 0) {
-                            // Si los valores están en attributes.values (estructura nueva)
                             const valueObj = contentItem.attributes.values[0];
                             value = parseFloat(valueObj.value || 0);
                             percentage = parseFloat(valueObj.percentage || 0);
                         } else if (contentItem.value !== undefined) {
-                            // Si los valores están directamente en el contentItem (estructura antigua)
                             value = parseFloat(contentItem.value || 0);
                             percentage = parseFloat(contentItem.percentage || 0);
                         }
 
-                        // Extraer color
                         const color = contentItem.attributes?.color || contentItem.color || null;
 
-                        // Añadir a la lista de demanda
                         demand.push({
                             type: contentItem.type,
                             value: value,
@@ -307,30 +283,23 @@ class ElectricBalance {
                     }
                 }
                 else if (interchangeTypes.includes(item.type)) {
-                    // Es un tipo de intercambio internacional
                     for (const contentItem of item.attributes.content) {
                         if (!contentItem || !contentItem.type) continue;
 
-                        // Buscar valores en la estructura del contentItem
                         let value = 0;
                         let percentage = 0;
 
-                        // Intentar obtener valores desde diferentes ubicaciones
                         if (contentItem.attributes && contentItem.attributes.values && contentItem.attributes.values.length > 0) {
-                            // Si los valores están en attributes.values (estructura nueva)
                             const valueObj = contentItem.attributes.values[0];
                             value = parseFloat(valueObj.value || 0);
                             percentage = parseFloat(valueObj.percentage || 0);
                         } else if (contentItem.value !== undefined) {
-                            // Si los valores están directamente en el contentItem (estructura antigua)
                             value = parseFloat(contentItem.value || 0);
                             percentage = parseFloat(contentItem.percentage || 0);
                         }
 
-                        // Extraer color
                         const color = contentItem.attributes?.color || contentItem.color || null;
 
-                        // Añadir a la lista de intercambio
                         interchange.push({
                             type: contentItem.type,
                             value: value,
@@ -341,41 +310,32 @@ class ElectricBalance {
                     }
                 }
                 else if (storageTypes.includes(item.type)) {
-                    // El almacenamiento puede ir a generación o demanda según su valor
                     for (const contentItem of item.attributes.content) {
                         if (!contentItem || !contentItem.type) continue;
 
-                        // Buscar valores en la estructura del contentItem
                         let value = 0;
                         let percentage = 0;
 
-                        // Intentar obtener valores desde diferentes ubicaciones
                         if (contentItem.attributes && contentItem.attributes.values && contentItem.attributes.values.length > 0) {
-                            // Si los valores están en attributes.values (estructura nueva)
                             const valueObj = contentItem.attributes.values[0];
                             value = parseFloat(valueObj.value || 0);
                             percentage = parseFloat(valueObj.percentage || 0);
                         } else if (contentItem.value !== undefined) {
-                            // Si los valores están directamente en el contentItem (estructura antigua)
                             value = parseFloat(contentItem.value || 0);
                             percentage = parseFloat(contentItem.percentage || 0);
                         }
 
-                        // Extraer color
                         const color = contentItem.attributes?.color || contentItem.color || null;
 
-                        // Para almacenamiento, si el valor es negativo va a demanda, si es positivo a generación
                         if (value < 0) {
-                            // Valor negativo = consumo de energía (demanda)
                             demand.push({
                                 type: contentItem.type,
-                                value: Math.abs(value), // Convertir a positivo para consistencia
+                                value: Math.abs(value),
                                 percentage: percentage,
                                 color: color,
                                 unit: 'MW'
                             });
                         } else {
-                            // Valor positivo = generación de energía
                             generation.push({
                                 type: contentItem.type,
                                 value: value,
@@ -389,7 +349,6 @@ class ElectricBalance {
             }
         }
 
-        // Si después de procesar todo, no tenemos datos, añadir valores por defecto
         if (generation.length === 0) {
             generation.push({
                 type: 'No disponible',
@@ -410,7 +369,6 @@ class ElectricBalance {
             });
         }
 
-        // Construir los metadatos
         const metadata = {
             title: data.attributes?.title || 'Balance Eléctrico',
             description: data.attributes?.description || '',

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: config/logger.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: config/logger.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @file logger.js
+ * @description Configuración del sistema de logging para la aplicación
+ *
+ * Este archivo configura un sistema de logging flexible y completo
+ * utilizando winston, con soporte para diferentes destinos, formatos
+ * y niveles según el entorno.
+ */
+
+const winston = require('winston');
+const { createLogger, format, transports } = winston;
+const path = require('path');
+const fs = require('fs');
+const config = require('./environment');
+
+// Asegurar que el directorio de logs existe
+const logDirectory = path.dirname(config.logging.logFilePath);
+if (config.logging.enableFile &amp;&amp; !fs.existsSync(logDirectory)) {
+    fs.mkdirSync(logDirectory, { recursive: true });
+}
+
+/**
+ * Formatos predefinidos para el logger
+ */
+const logFormats = {
+    developmentConsole: format.combine(
+        format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
+        format.colorize(),
+        format.printf(info => {
+            const { timestamp, level, message, ...rest } = info;
+            const logMethod = Object.keys(rest).length ?
+                `\n${JSON.stringify(rest, null, 2)}` : '';
+
+            return `${timestamp} ${level}: ${message}${logMethod}`;
+        })
+    ),
+
+    productionConsole: format.combine(
+        format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        format.printf(info => {
+            const { timestamp, level, message, ...rest } = info;
+            const meta = Object.keys(rest).length ?
+                ` ${JSON.stringify(rest)}` : '';
+
+            return `${timestamp} ${level}: ${message}${meta}`;
+        })
+    ),
+
+    json: format.combine(
+        format.timestamp(),
+        format.json()
+    )
+};
+
+/**
+ * Crea los transportes según la configuración
+ */
+function createTransports() {
+    const logTransports = [];
+
+    if (config.logging.enableConsole) {
+        logTransports.push(
+            new transports.Console({
+                level: config.logging.level,
+                format: config.logging.prettyPrint ?
+                    logFormats.developmentConsole :
+                    logFormats.productionConsole
+            })
+        );
+    }
+
+    if (config.logging.enableFile) {
+        logTransports.push(
+            new transports.File({
+                filename: config.logging.logFilePath,
+                level: config.logging.level,
+                format: logFormats.json,
+                maxsize: 10 * 1024 * 1024, // 10MB
+                maxFiles: 5,
+                tailable: true
+            })
+        );
+
+        logTransports.push(
+            new transports.File({
+                filename: path.join(
+                    path.dirname(config.logging.logFilePath),
+                    'error.log'
+                ),
+                level: 'error',
+                format: logFormats.json,
+                maxsize: 10 * 1024 * 1024, // 10MB
+                maxFiles: 5
+            })
+        );
+    }
+
+    return logTransports;
+}
+
+/**
+ * Crea y configura el logger
+ */
+const logger = createLogger({
+    level: config.logging.level,
+    levels: winston.config.npm.levels,
+    format: format.combine(
+        format.timestamp(),
+        format.errors({ stack: true }),
+        format.json()
+    ),
+    defaultMeta: {
+        service: 'electric-balance-api',
+        environment: config.env
+    },
+    transports: createTransports(),
+    exitOnError: false,
+    silent: process.env.NODE_ENV === 'test' &amp;&amp; !process.env.LOG_IN_TESTS
+});
+
+/**
+ * Middleware de Express para logging de peticiones HTTP
+ *
+ * @param {Object} req - Petición HTTP
+ * @param {Object} res - Respuesta HTTP
+ * @param {Function} next - Función para continuar
+ */
+function requestLogger(req, res, next) {
+    if (config.logging.excludePaths.some(path => req.path.startsWith(path))) {
+        return next();
+    }
+
+    const start = Date.now();
+    const requestId = req.headers['x-request-id'] ||
+        req.headers['x-correlation-id'] ||
+        `req-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+
+    req.requestId = requestId;
+    res.setHeader('X-Request-ID', requestId);
+
+    req.logger = logger.child({ requestId });
+
+    req.logger.debug(`HTTP ${req.method} ${req.url}`, {
+        method: req.method,
+        url: req.url,
+        query: req.query,
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+    });
+
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+        const message = `HTTP ${req.method} ${req.url} ${res.statusCode} - ${duration}ms`;
+
+        const level = res.statusCode >= 500 ? 'error' :
+            res.statusCode >= 400 ? 'warn' :
+                'info';
+
+        req.logger[level](message, {
+            method: req.method,
+            url: req.url,
+            statusCode: res.statusCode,
+            duration
+        });
+    });
+
+    next();
+}
+
+/**
+ * Middleware de Express para manejar errores
+ *
+ * @param {Error} err - Error producido
+ * @param {Object} req - Petición HTTP
+ * @param {Object} res - Respuesta HTTP
+ * @param {Function} next - Función para continuar
+ */
+function errorLogger(err, req, res, next) {
+    const logger = req.logger || module.exports;
+
+    logger.error(`Error processing ${req.method} ${req.url}`, {
+        error: {
+            message: err.message,
+            stack: err.stack,
+            name: err.name,
+            code: err.code
+        },
+        method: req.method,
+        url: req.url,
+        query: req.query,
+        body: req.body,
+        ip: req.ip,
+        user: req.user
+    });
+
+    next(err);
+}
+
+/**
+ * Extiende un objeto con métodos del logger
+ *
+ * @param {Object} target - Objeto a extender
+ * @param {Object} source - Objeto de origen (logger)
+ * @returns {Object} - Objeto extendido
+ */
+function extendWithLogger(target, source = logger) {
+    const logMethods = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'];
+
+    logMethods.forEach(method => {
+        target[method] = source[method].bind(source);
+    });
+
+    target.child = metadata => {
+        const childLogger = source.child(metadata);
+        return extendWithLogger({}, childLogger);
+    };
+
+    return target;
+}
+
+/**
+ * Crea un logger específico para un componente
+ *
+ * @param {string} component - Nombre del componente
+ * @param {Object} metadata - Metadatos adicionales
+ * @returns {Object} - Logger con el contexto específico
+ */
+function createComponentLogger(component, metadata = {}) {
+    return logger.child({
+        component,
+        ...metadata
+    });
+}
+
+/**
+ * Crea un logger específico para una petición GraphQL
+ *
+ * @param {Object} info - Información de la operación GraphQL
+ * @returns {Object} - Logger con el contexto específico
+ */
+function createGraphQLLogger(info) {
+    return logger.child({
+        operation: info.operation?.operation || 'query',
+        operationName: info.operationName,
+        fieldName: info.fieldName,
+        variables: info.variableValues,
+        graphql: true
+    });
+}
+
+module.exports = extendWithLogger({
+    requestLogger,
+    errorLogger,
+    createComponentLogger,
+    createGraphQLLogger,
+    stream: {
+        write: message => {
+            logger.info(message.trim());
+        }
+    }
+});
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="ApiRequestError.html">ApiRequestError</a></li><li><a href="ApiResponseError.html">ApiResponseError</a></li><li><a href="ApplicationError.html">ApplicationError</a></li><li><a href="BusinessRuleViolationError.html">BusinessRuleViolationError</a></li><li><a href="ConfigurationError.html">ConfigurationError</a></li><li><a href="DuplicateDataError.html">DuplicateDataError</a></li><li><a href="ElectricBalance.html">ElectricBalance</a></li><li><a href="ElectricBalanceController.html">ElectricBalanceController</a></li><li><a href="ExternalResourceError.html">ExternalResourceError</a></li><li><a href="FetchREEData.html">FetchREEData</a></li><li><a href="GetElectricBalanceByDateRange.html">GetElectricBalanceByDateRange</a></li><li><a href="InvalidDataError.html">InvalidDataError</a></li><li><a href="InvalidDateRangeError.html">InvalidDateRangeError</a></li><li><a href="MongoElectricBalanceRepository.html">MongoElectricBalanceRepository</a></li><li><a href="NetworkError.html">NetworkError</a></li><li><a href="NotAuthorizedError.html">NotAuthorizedError</a></li><li><a href="NotFoundError.html">NotFoundError</a></li><li><a href="REEApiService.html">REEApiService</a></li><li><a href="REEDataFetcher.html">REEDataFetcher</a></li><li><a href="RepositoryError.html">RepositoryError</a></li><li><a href="SchedulerManager.html">SchedulerManager</a></li><li><a href="ValidationError.html">ValidationError</a></li></ul><h3>Global</h3><ul><li><a href="global.html#MongoConnection">MongoConnection</a></li><li><a href="global.html#balanceItemSchema">balanceItemSchema</a></li><li><a href="global.html#bootstrap">bootstrap</a></li><li><a href="global.html#compareDatesIgnoringTime">compareDatesIgnoringTime</a></li><li><a href="global.html#config">config</a></li><li><a href="global.html#connectToDatabase">connectToDatabase</a></li><li><a href="global.html#createComponentLogger">createComponentLogger</a></li><li><a href="global.html#createGraphQLLogger">createGraphQLLogger</a></li><li><a href="global.html#createGraphQLServer">createGraphQLServer</a></li><li><a href="global.html#createTransports">createTransports</a></li><li><a href="global.html#determineMongoErrorCode">determineMongoErrorCode</a></li><li><a href="global.html#determineTimeScope">determineTimeScope</a></li><li><a href="global.html#electricBalanceResolvers">electricBalanceResolvers</a></li><li><a href="global.html#electricBalanceSchema">electricBalanceSchema</a></li><li><a href="global.html#errorLogger">errorLogger</a></li><li><a href="global.html#errorMiddleware">errorMiddleware</a></li><li><a href="global.html#extendWithLogger">extendWithLogger</a></li><li><a href="global.html#formatDate">formatDate</a></li><li><a href="global.html#formatDateForREEApi">formatDateForREEApi</a></li><li><a href="global.html#formatDateForUI">formatDateForUI</a></li><li><a href="global.html#formatDateISO">formatDateISO</a></li><li><a href="global.html#getDateRangeForPeriod">getDateRangeForPeriod</a></li><li><a href="global.html#getEnv">getEnv</a></li><li><a href="global.html#getErrorCodeFromType">getErrorCodeFromType</a></li><li><a href="global.html#getHttpStatusFromError">getHttpStatusFromError</a></li><li><a href="global.html#getMostRecentDate">getMostRecentDate</a></li><li><a href="global.html#handleApiError">handleApiError</a></li><li><a href="global.html#handleDatabaseError">handleDatabaseError</a></li><li><a href="global.html#handleError">handleError</a></li><li><a href="global.html#handleREEApiError">handleREEApiError</a></li><li><a href="global.html#handleValidationError">handleValidationError</a></li><li><a href="global.html#initializeRepositories">initializeRepositories</a></li><li><a href="global.html#initializeSchedulers">initializeSchedulers</a></li><li><a href="global.html#initializeServices">initializeServices</a></li><li><a href="global.html#logFormats">logFormats</a></li><li><a href="global.html#logger">logger</a></li><li><a href="global.html#mapErrorToGraphQLError">mapErrorToGraphQLError</a></li><li><a href="global.html#parseDate">parseDate</a></li><li><a href="global.html#requestLogger">requestLogger</a></li><li><a href="global.html#setupBasicRoutes">setupBasicRoutes</a></li><li><a href="global.html#setupGracefulShutdown">setupGracefulShutdown</a></li><li><a href="global.html#setupGraphQLServer">setupGraphQLServer</a></li><li><a href="global.html#setupMiddlewares">setupMiddlewares</a></li><li><a href="global.html#toArray">toArray</a></li><li><a href="global.html#toBoolean">toBoolean</a></li><li><a href="global.html#toNumber">toNumber</a></li><li><a href="global.html#toObject">toObject</a></li><li><a href="global.html#tryListen">tryListen</a></li><li><a href="global.html#validateDateRange">validateDateRange</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Sun May 18 2025 01:47:36 GMT-0500 (Ecuador Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

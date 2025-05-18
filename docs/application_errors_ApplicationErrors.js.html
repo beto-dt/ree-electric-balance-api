@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: application/errors/ApplicationErrors.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: application/errors/ApplicationErrors.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @file ApplicationErrors.js
+ * @description Definición de errores personalizados para la capa de aplicación
+ *
+ * Este archivo contiene las clases de errores específicos que pueden ocurrir
+ * durante la ejecución de los casos de uso. Permiten un manejo más granular
+ * de diferentes situaciones de error.
+ */
+
+/**
+ * Error base para todos los errores de la aplicación
+ * Extiende el Error nativo de JavaScript
+ */
+class ApplicationError extends Error {
+    /**
+     * Constructor del error base
+     *
+     * @param {string} message - Mensaje descriptivo del error
+     * @param {Object} [options={}] - Opciones adicionales
+     * @param {Error} [options.originalError] - Error original que causó este error
+     * @param {Object} [options.metadata] - Metadatos adicionales sobre el error
+     */
+    constructor(message, options = {}) {
+        super(message);
+        this.name = this.constructor.name;
+        this.originalError = options.originalError;
+        this.metadata = options.metadata || {};
+        this.timestamp = new Date();
+
+        Error.captureStackTrace(this, this.constructor);
+
+        if (this.originalError &amp;&amp; this.originalError.stack) {
+            this.stack += '\nCaused by: ' + this.originalError.stack;
+        }
+    }
+
+    /**
+     * Convierte el error a un objeto simple para logging o serialización
+     *
+     * @returns {Object} - Representación del error
+     */
+    toJSON() {
+        return {
+            name: this.name,
+            message: this.message,
+            timestamp: this.timestamp,
+            metadata: this.metadata,
+            originalError: this.originalError ? {
+                name: this.originalError.name,
+                message: this.originalError.message
+            } : undefined
+        };
+    }
+}
+
+/**
+ * Error para problemas con los datos de entrada
+ */
+class ValidationError extends ApplicationError {
+    /**
+     * Constructor del error de validación
+     *
+     * @param {string} message - Mensaje descriptivo del error
+     * @param {Object} [options={}] - Opciones adicionales
+     * @param {Object} [options.validationErrors] - Detalles de los errores de validación
+     */
+    constructor(message, options = {}) {
+        super(message, options);
+        this.validationErrors = options.validationErrors || {};
+    }
+
+    /**
+     * Convierte el error a un objeto simple para logging o serialización
+     *
+     * @returns {Object} - Representación del error
+     */
+    toJSON() {
+        return {
+            ...super.toJSON(),
+            validationErrors: this.validationErrors
+        };
+    }
+}
+
+/**
+ * Error para datos de entrada inválidos
+ */
+class InvalidDataError extends ValidationError {
+    constructor(message, options = {}) {
+        super(message, options);
+    }
+}
+
+/**
+ * Error para rangos de fechas inválidos
+ */
+class InvalidDateRangeError extends ValidationError {
+    constructor(message, options = {}) {
+        super(message, options);
+    }
+}
+
+/**
+ * Error para datos duplicados
+ */
+class DuplicateDataError extends ValidationError {
+    constructor(message, options = {}) {
+        super(message, options);
+    }
+}
+
+/**
+ * Error base para problemas con recursos externos
+ */
+class ExternalResourceError extends ApplicationError {
+    /**
+     * Constructor del error de recursos externos
+     *
+     * @param {string} message - Mensaje descriptivo del error
+     * @param {Object} [options={}] - Opciones adicionales
+     * @param {string} [options.resource] - Recurso que causó el error
+     * @param {string} [options.action] - Acción que se intentaba realizar
+     */
+    constructor(message, options = {}) {
+        super(message, options);
+        this.resource = options.resource;
+        this.action = options.action;
+    }
+
+    /**
+     * Convierte el error a un objeto simple para logging o serialización
+     *
+     * @returns {Object} - Representación del error
+     */
+    toJSON() {
+        return {
+            ...super.toJSON(),
+            resource: this.resource,
+            action: this.action
+        };
+    }
+}
+
+/**
+ * Error para problemas con peticiones a APIs
+ */
+class ApiRequestError extends ExternalResourceError {
+    /**
+     * Constructor del error de petición a API
+     *
+     * @param {string} message - Mensaje descriptivo del error
+     * @param {Object} [options={}] - Opciones adicionales
+     * @param {string} [options.endpoint] - Endpoint de la API
+     * @param {Object} [options.requestParams] - Parámetros de la petición
+     * @param {number} [options.statusCode] - Código de estado HTTP
+     */
+    constructor(message, options = {}) {
+        super(message, {
+            ...options,
+            resource: options.endpoint || 'API',
+            action: 'request'
+        });
+        this.endpoint = options.endpoint;
+        this.requestParams = options.requestParams;
+        this.statusCode = options.statusCode;
+    }
+
+    /**
+     * Convierte el error a un objeto simple para logging o serialización
+     *
+     * @returns {Object} - Representación del error
+     */
+    toJSON() {
+        return {
+            ...super.toJSON(),
+            endpoint: this.endpoint,
+            statusCode: this.statusCode,
+            requestParams: this.requestParams
+        };
+    }
+}
+
+/**
+ * Error para respuestas incorrectas de APIs
+ */
+class ApiResponseError extends ExternalResourceError {
+    /**
+     * Constructor del error de respuesta de API
+     *
+     * @param {string} message - Mensaje descriptivo del error
+     * @param {Object} [options={}] - Opciones adicionales
+     * @param {string} [options.endpoint] - Endpoint de la API
+     * @param {Object} [options.response] - Respuesta recibida
+     * @param {number} [options.statusCode] - Código de estado HTTP
+     */
+    constructor(message, options = {}) {
+        super(message, {
+            ...options,
+            resource: options.endpoint || 'API',
+            action: 'response'
+        });
+        this.endpoint = options.endpoint;
+        this.response = options.response;
+        this.statusCode = options.statusCode;
+    }
+
+    /**
+     * Convierte el error a un objeto simple para logging o serialización
+     *
+     * @returns {Object} - Representación del error
+     */
+    toJSON() {
+        return {
+            ...super.toJSON(),
+            endpoint: this.endpoint,
+            statusCode: this.statusCode,
+            hasResponse: this.response !== undefined
+        };
+    }
+}
+
+/**
+ * Error para problemas con los repositorios
+ */
+class RepositoryError extends ExternalResourceError {
+    /**
+     * Constructor del error de repositorio
+     *
+     * @param {string} message - Mensaje descriptivo del error
+     * @param {Object} [options={}] - Opciones adicionales
+     * @param {string} [options.entity] - Entidad afectada
+     * @param {string} [options.operation] - Operación que falló
+     */
+    constructor(message, options = {}) {
+        super(message, {
+            ...options,
+            resource: options.entity || 'Repository',
+            action: options.operation || 'database operation'
+        });
+        this.entity = options.entity;
+        this.operation = options.operation;
+    }
+
+    /**
+     * Convierte el error a un objeto simple para logging o serialización
+     *
+     * @returns {Object} - Representación del error
+     */
+    toJSON() {
+        return {
+            ...super.toJSON(),
+            entity: this.entity,
+            operation: this.operation
+        };
+    }
+}
+
+/**
+ * Error para operaciones no autorizadas
+ */
+class NotAuthorizedError extends ApplicationError {
+    /**
+     * Constructor del error de no autorizado
+     *
+     * @param {string} message - Mensaje descriptivo del error
+     * @param {Object} [options={}] - Opciones adicionales
+     * @param {string} [options.requiredPermission] - Permiso requerido
+     * @param {string} [options.userId] - ID del usuario
+     */
+    constructor(message, options = {}) {
+        super(message || 'Operation not authorized', options);
+        this.requiredPermission = options.requiredPermission;
+        this.userId = options.userId;
+    }
+
+    /**
+     * Convierte el error a un objeto simple para logging o serialización
+     *
+     * @returns {Object} - Representación del error
+     */
+    toJSON() {
+        return {
+            ...super.toJSON(),
+            requiredPermission: this.requiredPermission,
+            userId: this.userId
+        };
+    }
+}
+
+/**
+ * Error para recursos no encontrados
+ */
+class NotFoundError extends ApplicationError {
+    /**
+     * Constructor del error de no encontrado
+     *
+     * @param {string} message - Mensaje descriptivo del error
+     * @param {Object} [options={}] - Opciones adicionales
+     * @param {string} [options.resourceType] - Tipo de recurso
+     * @param {string|number} [options.resourceId] - ID del recurso
+     */
+    constructor(message, options = {}) {
+        const defaultMessage = options.resourceType &amp;&amp; options.resourceId
+            ? `${options.resourceType} with id ${options.resourceId} not found`
+            : 'Resource not found';
+
+        super(message || defaultMessage, options);
+        this.resourceType = options.resourceType;
+        this.resourceId = options.resourceId;
+    }
+
+    /**
+     * Convierte el error a un objeto simple para logging o serialización
+     *
+     * @returns {Object} - Representación del error
+     */
+    toJSON() {
+        return {
+            ...super.toJSON(),
+            resourceType: this.resourceType,
+            resourceId: this.resourceId
+        };
+    }
+}
+
+/**
+ * Error para operaciones de negocio inválidas
+ */
+class BusinessRuleViolationError extends ApplicationError {
+    /**
+     * Constructor del error de violación de regla de negocio
+     *
+     * @param {string} message - Mensaje descriptivo del error
+     * @param {Object} [options={}] - Opciones adicionales
+     * @param {string} [options.rule] - Regla violada
+     */
+    constructor(message, options = {}) {
+        super(message, options);
+        this.rule = options.rule;
+    }
+
+    /**
+     * Convierte el error a un objeto simple para logging o serialización
+     *
+     * @returns {Object} - Representación del error
+     */
+    toJSON() {
+        return {
+            ...super.toJSON(),
+            rule: this.rule
+        };
+    }
+}
+
+/**
+ * Error para configuración incorrecta
+ */
+class ConfigurationError extends ApplicationError {
+    /**
+     * Constructor del error de configuración
+     *
+     * @param {string} message - Mensaje descriptivo del error
+     * @param {Object} [options={}] - Opciones adicionales
+     * @param {string} [options.configKey] - Clave de configuración
+     */
+    constructor(message, options = {}) {
+        super(message, options);
+        this.configKey = options.configKey;
+    }
+
+    /**
+     * Convierte el error a un objeto simple para logging o serialización
+     *
+     * @returns {Object} - Representación del error
+     */
+    toJSON() {
+        return {
+            ...super.toJSON(),
+            configKey: this.configKey
+        };
+    }
+}
+
+/**
+ * Error para problemas de red o conectividad
+ */
+class NetworkError extends ExternalResourceError {
+    /**
+     * Constructor del error de red
+     *
+     * @param {string} message - Mensaje descriptivo del error
+     * @param {Object} [options={}] - Opciones adicionales
+     * @param {boolean} [options.isTimeout] - Si es un error de timeout
+     * @param {number} [options.retryAttempt] - Número de intento de reintento
+     */
+    constructor(message, options = {}) {
+        super(message, {
+            ...options,
+            resource: options.resource || 'Network',
+            action: options.action || 'connection'
+        });
+        this.isTimeout = options.isTimeout || false;
+        this.retryAttempt = options.retryAttempt;
+    }
+
+    /**
+     * Convierte el error a un objeto simple para logging o serialización
+     *
+     * @returns {Object} - Representación del error
+     */
+    toJSON() {
+        return {
+            ...super.toJSON(),
+            isTimeout: this.isTimeout,
+            retryAttempt: this.retryAttempt
+        };
+    }
+}
+
+module.exports = {
+    ApplicationError,
+    ValidationError,
+    InvalidDataError,
+    InvalidDateRangeError,
+    DuplicateDataError,
+    ExternalResourceError,
+    ApiRequestError,
+    ApiResponseError,
+    RepositoryError,
+    NotAuthorizedError,
+    NotFoundError,
+    BusinessRuleViolationError,
+    ConfigurationError,
+    NetworkError
+};
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="ApiRequestError.html">ApiRequestError</a></li><li><a href="ApiResponseError.html">ApiResponseError</a></li><li><a href="ApplicationError.html">ApplicationError</a></li><li><a href="BusinessRuleViolationError.html">BusinessRuleViolationError</a></li><li><a href="ConfigurationError.html">ConfigurationError</a></li><li><a href="DuplicateDataError.html">DuplicateDataError</a></li><li><a href="ElectricBalance.html">ElectricBalance</a></li><li><a href="ElectricBalanceController.html">ElectricBalanceController</a></li><li><a href="ExternalResourceError.html">ExternalResourceError</a></li><li><a href="FetchREEData.html">FetchREEData</a></li><li><a href="GetElectricBalanceByDateRange.html">GetElectricBalanceByDateRange</a></li><li><a href="InvalidDataError.html">InvalidDataError</a></li><li><a href="InvalidDateRangeError.html">InvalidDateRangeError</a></li><li><a href="MongoElectricBalanceRepository.html">MongoElectricBalanceRepository</a></li><li><a href="NetworkError.html">NetworkError</a></li><li><a href="NotAuthorizedError.html">NotAuthorizedError</a></li><li><a href="NotFoundError.html">NotFoundError</a></li><li><a href="REEApiService.html">REEApiService</a></li><li><a href="REEDataFetcher.html">REEDataFetcher</a></li><li><a href="RepositoryError.html">RepositoryError</a></li><li><a href="SchedulerManager.html">SchedulerManager</a></li><li><a href="ValidationError.html">ValidationError</a></li></ul><h3>Global</h3><ul><li><a href="global.html#MongoConnection">MongoConnection</a></li><li><a href="global.html#balanceItemSchema">balanceItemSchema</a></li><li><a href="global.html#bootstrap">bootstrap</a></li><li><a href="global.html#compareDatesIgnoringTime">compareDatesIgnoringTime</a></li><li><a href="global.html#config">config</a></li><li><a href="global.html#connectToDatabase">connectToDatabase</a></li><li><a href="global.html#createComponentLogger">createComponentLogger</a></li><li><a href="global.html#createGraphQLLogger">createGraphQLLogger</a></li><li><a href="global.html#createGraphQLServer">createGraphQLServer</a></li><li><a href="global.html#createTransports">createTransports</a></li><li><a href="global.html#determineMongoErrorCode">determineMongoErrorCode</a></li><li><a href="global.html#determineTimeScope">determineTimeScope</a></li><li><a href="global.html#electricBalanceResolvers">electricBalanceResolvers</a></li><li><a href="global.html#electricBalanceSchema">electricBalanceSchema</a></li><li><a href="global.html#errorLogger">errorLogger</a></li><li><a href="global.html#errorMiddleware">errorMiddleware</a></li><li><a href="global.html#extendWithLogger">extendWithLogger</a></li><li><a href="global.html#formatDate">formatDate</a></li><li><a href="global.html#formatDateForREEApi">formatDateForREEApi</a></li><li><a href="global.html#formatDateForUI">formatDateForUI</a></li><li><a href="global.html#formatDateISO">formatDateISO</a></li><li><a href="global.html#getDateRangeForPeriod">getDateRangeForPeriod</a></li><li><a href="global.html#getEnv">getEnv</a></li><li><a href="global.html#getErrorCodeFromType">getErrorCodeFromType</a></li><li><a href="global.html#getHttpStatusFromError">getHttpStatusFromError</a></li><li><a href="global.html#getMostRecentDate">getMostRecentDate</a></li><li><a href="global.html#handleApiError">handleApiError</a></li><li><a href="global.html#handleDatabaseError">handleDatabaseError</a></li><li><a href="global.html#handleError">handleError</a></li><li><a href="global.html#handleREEApiError">handleREEApiError</a></li><li><a href="global.html#handleValidationError">handleValidationError</a></li><li><a href="global.html#initializeRepositories">initializeRepositories</a></li><li><a href="global.html#initializeSchedulers">initializeSchedulers</a></li><li><a href="global.html#initializeServices">initializeServices</a></li><li><a href="global.html#logFormats">logFormats</a></li><li><a href="global.html#logger">logger</a></li><li><a href="global.html#mapErrorToGraphQLError">mapErrorToGraphQLError</a></li><li><a href="global.html#parseDate">parseDate</a></li><li><a href="global.html#requestLogger">requestLogger</a></li><li><a href="global.html#setupBasicRoutes">setupBasicRoutes</a></li><li><a href="global.html#setupGracefulShutdown">setupGracefulShutdown</a></li><li><a href="global.html#setupGraphQLServer">setupGraphQLServer</a></li><li><a href="global.html#setupMiddlewares">setupMiddlewares</a></li><li><a href="global.html#toArray">toArray</a></li><li><a href="global.html#toBoolean">toBoolean</a></li><li><a href="global.html#toNumber">toNumber</a></li><li><a href="global.html#toObject">toObject</a></li><li><a href="global.html#tryListen">tryListen</a></li><li><a href="global.html#validateDateRange">validateDateRange</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Sun May 18 2025 01:47:36 GMT-0500 (Ecuador Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

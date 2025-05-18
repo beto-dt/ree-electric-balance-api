@@ -46,10 +46,8 @@ class SchedulerManager {
                 return;
             }
 
-            // Inicializar tarea de obtención de datos de REE
             await this._initREEDataFetcher();
 
-            // Añadir aquí la inicialización de otras tareas programadas
 
             this.isInitialized = true;
             logger.info('All schedulers initialized successfully');
@@ -68,13 +66,11 @@ class SchedulerManager {
         logger.info('Shutting down schedulers');
 
         try {
-            // Detener tarea de obtención de datos de REE
             if (this.schedulers.reeDataFetcher) {
                 this.schedulers.reeDataFetcher.stop();
                 logger.info('REE data fetcher stopped');
             }
 
-            // Añadir aquí la detención de otras tareas programadas
 
             this.isInitialized = false;
             logger.info('All schedulers shut down successfully');
@@ -96,49 +92,12 @@ class SchedulerManager {
             schedulers: {}
         };
 
-        // Estado de tarea de obtención de datos de REE
         if (this.schedulers.reeDataFetcher) {
             status.schedulers.reeDataFetcher = this.schedulers.reeDataFetcher.getStatus();
         }
 
-        // Añadir aquí el estado de otras tareas programadas
 
         return status;
-    }
-
-    /**
-     * Ejecuta manualmente una tarea programada
-     *
-     * @param {string} schedulerName - Nombre de la tarea
-     * @param {Object} params - Parámetros para la ejecución
-     * @returns {Promise<Object>} - Resultado de la ejecución
-     */
-    async executeManually(schedulerName, params = {}) {
-        logger.info(`Manual execution requested for scheduler: ${schedulerName}`);
-
-        if (!this.schedulers[schedulerName]) {
-            throw new Error(`Scheduler ${schedulerName} not found`);
-        }
-
-        try {
-            let result;
-
-            // Ejecutar tarea específica según su nombre
-            switch (schedulerName) {
-                case 'reeDataFetcher':
-                    result = await this.schedulers.reeDataFetcher.fetchDataManually(params);
-                    break;
-                // Añadir aquí otros casos para otras tareas
-                default:
-                    throw new Error(`No manual execution method for scheduler: ${schedulerName}`);
-            }
-
-            logger.info(`Manual execution of ${schedulerName} completed successfully`);
-            return result;
-        } catch (error) {
-            logger.error(`Error in manual execution of ${schedulerName}: ${error.message}`, error);
-            throw error;
-        }
     }
 
     /**
@@ -151,11 +110,9 @@ class SchedulerManager {
         logger.info('Initializing REE data fetcher scheduler');
 
         try {
-            // Configuración para diferentes timeScopes
             const timeScopes = ['hour', 'day', 'month'];
             const schedulers = {};
 
-            // Crear un fetcher para cada timeScope con su propia programación
             for (const timeScope of timeScopes) {
                 const schedule = this._getScheduleForTimeScope(timeScope);
                 const fetcher = new REEDataFetcher(
@@ -169,30 +126,25 @@ class SchedulerManager {
                         initialFetch: config.scheduling.initialFetch,
                         historicalPeriods: config.scheduling.historicalPeriods,
                         retryOnFailure: true,
-                        retryDelay: 5 * 60 * 1000, // 5 minutos
+                        retryDelay: 5 * 60 * 1000,
                         maxRetries: 3
                     }
                 );
 
-                // Iniciar el fetcher
                 await fetcher.start();
 
                 schedulers[timeScope] = fetcher;
                 logger.info(`REE data fetcher for ${timeScope} initialized with schedule: ${schedule}`);
             }
 
-            // Guardar una referencia al fetcher principal (horario)
-            // y almacenar todos los fetchers en un objeto para acceso
             this.schedulers.reeDataFetcher = schedulers.hour;
             this.schedulers.reeDataFetcher.allFetchers = schedulers;
 
-            // Sobreescribir el método stop para detener todos los fetchers
             const originalStop = this.schedulers.reeDataFetcher.stop;
             this.schedulers.reeDataFetcher.stop = () => {
                 Object.values(schedulers).forEach(fetcher => originalStop.call(fetcher));
             };
 
-            // Sobreescribir el método getStatus para obtener estado de todos los fetchers
             const originalGetStatus = this.schedulers.reeDataFetcher.getStatus;
             this.schedulers.reeDataFetcher.getStatus = () => {
                 const status = {
@@ -206,7 +158,6 @@ class SchedulerManager {
                 return status;
             };
 
-            // Sobreescribir fetchDataManually para permitir especificar el timeScope
             this.schedulers.reeDataFetcher.fetchDataManually = async (params) => {
                 const timeScope = params.timeScope || 'hour';
 
@@ -245,7 +196,6 @@ class SchedulerManager {
     }
 }
 
-// Exportar la clase y crear una instancia singleton
 const schedulerManager = new SchedulerManager();
 
 module.exports = {

@@ -25,7 +25,7 @@ class REEApiService {
      */
     constructor(config = {}, logger = console) {
         this.baseUrl = config.baseUrl || 'https://apidatos.ree.es';
-        this.timeout = config.timeout || 10000; // 10 segundos por defecto
+        this.timeout = config.timeout || 10000;
         this.headers = {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
@@ -33,14 +33,12 @@ class REEApiService {
         };
         this.logger = logger;
 
-        // Crear instancia de axios con configuración base
         this.client = axios.create({
             baseURL: this.baseUrl,
             timeout: this.timeout,
             headers: this.headers
         });
 
-        // Configurar interceptores para logging
         this._setupInterceptors();
     }
 
@@ -58,10 +56,8 @@ class REEApiService {
      */
     async fetchBalanceData(startDate, endDate, timeScope = 'day', options = {}) {
         try {
-            // Construir la URL del endpoint
             const endpoint = '/es/datos/balance/balance-electrico';
 
-            // Construir los query params
             const params = {
                 start_date: startDate,
                 end_date: endDate,
@@ -71,10 +67,8 @@ class REEApiService {
 
             this.logger.info(`Fetching electric balance data from REE API: ${startDate} to ${endDate} (${timeScope})`);
 
-            // Realizar la petición a la API
             const response = await this.client.get(endpoint, { params });
 
-            // Verificar respuesta
             if (!response.data) {
                 throw new ApiResponseError(
                     'Empty response from REE API',
@@ -88,91 +82,6 @@ class REEApiService {
         }
     }
 
-    /**
-     * Obtiene la geo información del balance eléctrico
-     *
-     * @param {string} startDate - Fecha de inicio
-     * @param {string} endDate - Fecha de fin
-     * @param {string} timeScope - Granularidad temporal
-     * @param {string} region - Código de región (opcional)
-     * @returns {Promise<Object>} - Datos de geo balance
-     * @throws {ApiRequestError|ApiResponseError|NetworkError} - Si hay errores
-     */
-    async fetchGeoBalance(startDate, endDate, timeScope = 'day', region = null) {
-        try {
-            // Construir la URL del endpoint
-            const endpoint = '/es/datos/balance/balance-electrico-geolocalized';
-
-            // Construir los query params
-            const params = {
-                start_date: startDate,
-                end_date: endDate,
-                time_trunc: timeScope
-            };
-
-            // Añadir región si se especifica
-            if (region) {
-                params.region = region;
-            }
-
-            this.logger.info(`Fetching geo balance data from REE API: ${startDate} to ${endDate} (${timeScope})`);
-
-            // Realizar la petición a la API
-            const response = await this.client.get(endpoint, { params });
-
-            // Verificar respuesta
-            if (!response.data) {
-                throw new ApiResponseError(
-                    'Empty response from REE API',
-                    { endpoint, statusCode: response.status }
-                );
-            }
-
-            return response.data;
-        } catch (error) {
-            return this._handleApiError(error, 'fetchGeoBalance', { startDate, endDate, timeScope, region });
-        }
-    }
-
-    /**
-     * Obtiene los indicadores de balance eléctrico
-     *
-     * @param {string} startDate - Fecha de inicio
-     * @param {string} endDate - Fecha de fin
-     * @param {string} timeScope - Granularidad temporal
-     * @returns {Promise<Object>} - Indicadores de balance
-     * @throws {ApiRequestError|ApiResponseError|NetworkError} - Si hay errores
-     */
-    async fetchBalanceIndicators(startDate, endDate, timeScope = 'day') {
-        try {
-            // Construir la URL del endpoint
-            const endpoint = '/es/datos/balance/balance-electrico-indicadores';
-
-            // Construir los query params
-            const params = {
-                start_date: startDate,
-                end_date: endDate,
-                time_trunc: timeScope
-            };
-
-            this.logger.info(`Fetching balance indicators from REE API: ${startDate} to ${endDate} (${timeScope})`);
-
-            // Realizar la petición a la API
-            const response = await this.client.get(endpoint, { params });
-
-            // Verificar respuesta
-            if (!response.data) {
-                throw new ApiResponseError(
-                    'Empty response from REE API',
-                    { endpoint, statusCode: response.status }
-                );
-            }
-
-            return response.data;
-        } catch (error) {
-            return this._handleApiError(error, 'fetchBalanceIndicators', { startDate, endDate, timeScope });
-        }
-    }
 
     /**
      * Verifica el estado de la API de REE
@@ -182,9 +91,8 @@ class REEApiService {
      */
     async checkApiStatus() {
         try {
-            // Usar un endpoint simple para verificar disponibilidad
             const response = await this.client.get('/es/datos', {
-                timeout: 5000 // Timeout más corto para esta operación
+                timeout: 5000
             });
 
             return {
@@ -211,17 +119,14 @@ class REEApiService {
      */
     async fetchGenerationTypes() {
         try {
-            // Solicitar un período mínimo solo para obtener los tipos
             const now = new Date();
             const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
             const startDate = this._formatDate(yesterday);
             const endDate = this._formatDate(now);
 
-            // Obtener datos de balance
             const response = await this.fetchBalanceData(startDate, endDate, 'day');
 
-            // Extraer los tipos de generación
             if (response && response.included) {
                 const generationData = response.included.find(item =>
                     item.type === 'generation'
@@ -246,37 +151,11 @@ class REEApiService {
     }
 
     /**
-     * Obtiene metadatos sobre la API de REE
-     *
-     * @returns {Promise<Object>} - Metadatos de la API
-     * @throws {ApiRequestError|ApiResponseError|NetworkError} - Si hay errores
-     */
-    async fetchApiMetadata() {
-        try {
-            // Obtener metadatos de la API
-            const response = await this.client.get('/es/datos/catalogo');
-
-            // Verificar respuesta
-            if (!response.data) {
-                throw new ApiResponseError(
-                    'Empty response from REE API',
-                    { endpoint: '/es/datos/catalogo', statusCode: response.status }
-                );
-            }
-
-            return response.data;
-        } catch (error) {
-            return this._handleApiError(error, 'fetchApiMetadata');
-        }
-    }
-
-    /**
      * Configura interceptores para peticiones y respuestas
      *
      * @private
      */
     _setupInterceptors() {
-        // Interceptor para peticiones
         this.client.interceptors.request.use(
             config => {
                 const { method, url, params, data } = config;
@@ -290,7 +169,6 @@ class REEApiService {
             }
         );
 
-        // Interceptor para respuestas
         this.client.interceptors.response.use(
             response => {
                 const { status, config, headers } = response;
@@ -326,7 +204,6 @@ class REEApiService {
      * @private
      */
     _handleApiError(error, operation, params = {}) {
-        // Si es un error de red (sin respuesta)
         if (!error.response) {
             if (error.code === 'ECONNABORTED') {
                 throw new NetworkError(
@@ -350,11 +227,9 @@ class REEApiService {
             );
         }
 
-        // Si es un error de respuesta HTTP
         if (error.response) {
             const { status, data } = error.response;
 
-            // Error de cliente (4xx)
             if (status >= 400 && status < 500) {
                 throw new ApiRequestError(
                     `Client error when calling REE API: ${status} ${data?.message || error.message}`,
@@ -367,7 +242,6 @@ class REEApiService {
                 );
             }
 
-            // Error de servidor (5xx)
             if (status >= 500) {
                 throw new ApiResponseError(
                     `Server error from REE API: ${status} ${data?.message || error.message}`,
@@ -381,7 +255,6 @@ class REEApiService {
             }
         }
 
-        // Para cualquier otro tipo de error
         throw new ApiRequestError(
             `Error when calling REE API: ${error.message}`,
             {

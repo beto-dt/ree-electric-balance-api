@@ -18,10 +18,8 @@ const fs = require('fs');
 const dotenv = require('dotenv');
 const ora = require('ora');
 
-// Cargar variables de entorno
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-// Configurar opciones del CLI
 program
     .version('1.0.0')
     .description('Test connectivity and functionality of the REE API')
@@ -282,7 +280,6 @@ function analyzeApiResponse(response) {
         }
     }
 
-    // Analizar included
     if (response.included && Array.isArray(response.included)) {
         console.log(colors.yellow('\nIncluded Items:'));
 
@@ -313,7 +310,6 @@ function analyzeApiResponse(response) {
         });
     }
 
-    // Analizar links
     if (response.links) {
         console.log(colors.yellow('\nLinks:'));
         Object.entries(response.links).forEach(([key, value]) => {
@@ -321,7 +317,6 @@ function analyzeApiResponse(response) {
         });
     }
 
-    // Analizar meta
     if (response.meta) {
         console.log(colors.yellow('\nMeta:'));
         Object.keys(response.meta).forEach(key => {
@@ -330,5 +325,4 @@ function analyzeApiResponse(response) {
     }
 }
 
-// Ejecutar script
 main();

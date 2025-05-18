@@ -125,14 +125,10 @@ const config = {
     scheduling: {
         enabled: getEnv('SCHEDULED_TASKS_ENABLED', true, toBoolean),
         timeZone: getEnv('SCHEDULED_TASKS_TIMEZONE', 'Europe/Madrid'),
-        // Expresión cron para la tarea de obtención de datos horarios
         hourlyFetchCron: getEnv('HOURLY_FETCH_CRON', '0 */1 * * *'), // Cada hora
-        // Expresión cron para la tarea de obtención de datos diarios
         dailyFetchCron: getEnv('DAILY_FETCH_CRON', '0 4 * * *'), // Cada día a las 4 AM
-        // Expresión cron para la tarea de obtención de datos mensuales
         monthlyFetchCron: getEnv('MONTHLY_FETCH_CRON', '0 5 1 * *'), // Primer día del mes a las 5 AM
         initialFetch: getEnv('INITIAL_FETCH_ENABLED', true, toBoolean),
-        // Períodos históricos a obtener (en días)
         historicalPeriods: {
             hour: getEnv('HISTORICAL_HOURS_DAYS', 2, toNumber), // 2 días de datos horarios
             day: getEnv('HISTORICAL_DAYS_DAYS', 60, toNumber), // 60 días de datos diarios

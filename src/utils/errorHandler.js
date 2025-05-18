@@ -8,7 +8,6 @@
  */
 
 const {
-    ApplicationError,
     ApiRequestError,
     ApiResponseError,
     RepositoryError,
@@ -27,7 +26,6 @@ const {
  * @returns {Object} - Respuesta de error estandarizada
  */
 function handleError(error, logger, includeStack = false) {
-    // Registrar el error
     if (logger) {
         logger.error(`Error: ${error.message}`, {
             error: {
@@ -39,7 +37,6 @@ function handleError(error, logger, includeStack = false) {
         });
     }
 
-    // Construir respuesta base
     const errorResponse = {
         success: false,
         error: {
@@ -49,7 +46,6 @@ function handleError(error, logger, includeStack = false) {
         }
     };
 
-    // Añadir detalles específicos según el tipo de error
     if (error instanceof ValidationError) {
         errorResponse.error.validationErrors = error.validationErrors || {};
         errorResponse.error.code = errorResponse.error.code || 'VALIDATION_ERROR';
@@ -82,17 +78,14 @@ function handleError(error, logger, includeStack = false) {
         errorResponse.error.code = errorResponse.error.code || 'BUSINESS_RULE_VIOLATION';
     }
 
-    // Añadir stack trace en entornos de desarrollo o si se solicita explícitamente
     if ((process.env.NODE_ENV !== 'production' || includeStack) && error.stack) {
         errorResponse.error.stack = error.stack;
     }
 
-    // Añadir metadatos si existen
     if (error.metadata) {
         errorResponse.error.metadata = error.metadata;
     }
 
-    // Añadir error original si existe
     if (error.originalError && process.env.NODE_ENV !== 'production') {
         errorResponse.error.originalError = {
             name: error.originalError.name,
@@ -112,12 +105,10 @@ function handleError(error, logger, includeStack = false) {
  * @returns {Object} - Respuesta de error estandarizada
  */
 function handleApiError(error, logger) {
-    // Si ya es un error de API, procesarlo directamente
     if (error instanceof ApiRequestError || error instanceof ApiResponseError) {
         return handleError(error, logger);
     }
 
-    // Si es un error de red o timeout
     if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED') {
         const apiError = new ApiRequestError(
             `Connection error when calling API: ${error.message}`,
@@ -130,11 +121,9 @@ function handleApiError(error, logger) {
         return handleError(apiError, logger);
     }
 
-    // Si es un error de HTTP
     if (error.response) {
         const { status, data } = error.response;
 
-        // Error 4xx
         if (status >= 400 && status < 500) {
             const apiError = new ApiRequestError(
                 `Client error: ${status} ${data?.message || error.message}`,
@@ -149,7 +138,6 @@ function handleApiError(error, logger) {
             return handleError(apiError, logger);
         }
 
-        // Error 5xx
         if (status >= 500) {
             const apiError = new ApiResponseError(
                 `Server error: ${status} ${data?.message || error.message}`,
@@ -165,7 +153,6 @@ function handleApiError(error, logger) {
         }
     }
 
-    // Otros errores de API
     const apiError = new ApiRequestError(
         `API error: ${error.message}`,
         {
@@ -187,15 +174,12 @@ function handleApiError(error, logger) {
  * @returns {Object} - Respuesta de error estandarizada
  */
 function handleDatabaseError(error, logger, entity, operation) {
-    // Si ya es un error de repositorio, procesarlo directamente
     if (error instanceof RepositoryError) {
         return handleError(error, logger);
     }
 
-    // Error de MongoDB específico
     let dbError;
 
-    // Error de duplicación (violación de índice único)
     if (error.code === 11000) {
         dbError = new RepositoryError(
             `Duplicate entry: ${JSON.stringify(error.keyValue)}`,
@@ -208,11 +192,9 @@ function handleDatabaseError(error, logger, entity, operation) {
             }
         );
     }
-    // Error de validación de Mongoose
     else if (error.name === 'ValidationError') {
         const validationErrors = {};
 
-        // Extraer errores de validación
         if (error.errors) {
             Object.keys(error.errors).forEach(key => {
                 validationErrors[key] = error.errors[key].message;
@@ -230,7 +212,6 @@ function handleDatabaseError(error, logger, entity, operation) {
             }
         );
     }
-    // Error general de base de datos
     else {
         dbError = new RepositoryError(
             `Database error: ${error.message}`,
@@ -254,12 +235,10 @@ function handleDatabaseError(error, logger, entity, operation) {
  * @returns {Object} - Respuesta de error estandarizada
  */
 function handleValidationError(error, logger) {
-    // Si ya es un error de validación, procesarlo directamente
     if (error instanceof ValidationError) {
         return handleError(error, logger);
     }
 
-    // Si es un objeto de errores de validación
     if (typeof error === 'object' && !error.message) {
         const validationError = new ValidationError(
             'Validation failed',
@@ -272,7 +251,6 @@ function handleValidationError(error, logger) {
         return handleError(validationError, logger);
     }
 
-    // Error general de validación
     const validationError = new ValidationError(
         `Validation error: ${error.message || 'Invalid data provided'}`,
         {
@@ -293,10 +271,8 @@ function handleValidationError(error, logger) {
  * @returns {Object} - Respuesta de error estandarizada
  */
 function handleREEApiError(error, logger) {
-    // Error específico de la API de REE
     let reeError;
 
-    // Si es un error de timeout
     if (error.code === 'ECONNABORTED') {
         reeError = new ApiRequestError(
             'REE API timeout: The request took too long to complete',
@@ -307,11 +283,9 @@ function handleREEApiError(error, logger) {
             }
         );
     }
-    // Si es un error de respuesta
     else if (error.response) {
         const { status, data } = error.response;
 
-        // Mapear códigos de estado a mensajes específicos
         let message;
         switch (status) {
             case 400:
@@ -343,11 +317,9 @@ function handleREEApiError(error, logger) {
             }
         );
     }
-    // Si es un error de fecha
     else if (error instanceof InvalidDateRangeError) {
         reeError = error;
     }
-    // Si es otro tipo de error
     else {
         reeError = new ApiRequestError(
             `REE API error: ${error.message}`,
@@ -369,16 +341,12 @@ function handleREEApiError(error, logger) {
  */
 function errorMiddleware(logger) {
     return (err, req, res, next) => {
-        // Usar el logger de la petición si existe
         const log = req.logger || logger;
 
-        // Generar respuesta de error
         const errorResponse = handleError(err, log);
 
-        // Determinar código de estado HTTP
         const statusCode = getHttpStatusFromError(err);
 
-        // Enviar respuesta al cliente
         res.status(statusCode).json(errorResponse);
     };
 }
@@ -391,45 +359,44 @@ function errorMiddleware(logger) {
  */
 function getHttpStatusFromError(error) {
     if (error instanceof ValidationError || error instanceof InvalidDateRangeError) {
-        return 400; // Bad Request
+        return 400;
     }
 
     if (error instanceof NotFoundError) {
-        return 404; // Not Found
+        return 404;
     }
 
     if (error instanceof BusinessRuleViolationError) {
-        return 422; // Unprocessable Entity
+        return 422;
     }
 
     if (error instanceof ApiRequestError) {
-        return error.statusCode || 400; // Bad Request
+        return error.statusCode || 400;
     }
 
     if (error instanceof ApiResponseError) {
-        return error.statusCode || 502; // Bad Gateway
+        return error.statusCode || 502;
     }
 
     if (error instanceof RepositoryError) {
-        return 500; // Internal Server Error
+        return 500;
     }
 
     if (error.statusCode) {
         return error.statusCode;
     }
 
-    // Otros códigos comunes
     switch (error.name) {
         case 'UnauthorizedError':
-            return 401; // Unauthorized
+            return 401;
         case 'ForbiddenError':
-            return 403; // Forbidden
+            return 403;
         case 'NotFoundError':
-            return 404; // Not Found
+            return 404;
         case 'ConflictError':
-            return 409; // Conflict
+            return 409;
         default:
-            return 500; // Internal Server Error
+            return 500;
     }
 }
 
@@ -440,10 +407,8 @@ function getHttpStatusFromError(error) {
  * @returns {string} - Código de error
  */
 function getErrorCodeFromType(error) {
-    // Usar código existente si está disponible
     if (error.code) return error.code;
 
-    // Determinar por el tipo de error
     switch (error.name) {
         case 'ValidationError':
             return 'VALIDATION_ERROR';
@@ -471,7 +436,6 @@ function getErrorCodeFromType(error) {
  * @returns {string} - Código de error
  */
 function determineMongoErrorCode(error) {
-    // Códigos de error específicos de MongoDB
     if (error.code) {
         switch (error.code) {
             case 11000:
@@ -483,7 +447,6 @@ function determineMongoErrorCode(error) {
         }
     }
 
-    // Por el nombre del error
     switch (error.name) {
         case 'ValidationError':
             return 'MONGO_VALIDATION_ERROR';

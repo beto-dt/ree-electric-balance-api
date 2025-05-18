@@ -7,8 +7,8 @@
  * y permitiendo un mejor manejo de errores y transformaciones de datos.
  */
 
-const GetElectricBalanceByDateRange = require('../../application/useCases/GetElectricBalanceByDateRange');
-const FetchREEData = require('../../application/useCases/FetchREEData');
+const GetElectricBalanceByDateRange = require('../../application/use-cases/GetElectricBalanceByDateRange');
+const FetchREEData = require('../../application/use-cases/FetchREEData');
 const { InvalidDateRangeError } = require('../../application/errors/ApplicationErrors');
 
 /**
@@ -63,16 +63,13 @@ class ElectricBalanceController {
 
         this.logger.debug(`Getting electric balance by date range: ${startDate} - ${endDate} (${timeScope})`);
 
-        // Validar parámetros
         this._validateDateRange(startDate, endDate);
 
-        // Instanciar caso de uso
         const getElectricBalanceUseCase = new GetElectricBalanceByDateRange(
             this.repositories.electricBalanceRepository,
             this.services.electricBalanceService
         );
 
-        // Ejecutar caso de uso
         const result = await getElectricBalanceUseCase.execute({
             startDate,
             endDate,
@@ -106,27 +103,22 @@ class ElectricBalanceController {
 
         this.logger.debug(`Getting paginated electric balance: page ${pagination.page}, size ${pagination.pageSize}`);
 
-        // Validar parámetros
         this._validateDateRange(startDate, endDate);
 
-        // Preparar opciones
         const options = {
             page: pagination.page,
             limit: pagination.pageSize,
             sort: {}
         };
 
-        // Configurar ordenación
         if (pagination.orderBy) {
             options.sort[pagination.orderBy] = pagination.orderDirection === 'DESC' ? -1 : 1;
         } else {
-            options.sort.timestamp = 1; // Ordenación por defecto
+            options.sort.timestamp = 1;
         }
 
-        // Preparar filtros
         const dbFilters = this._transformFilters(filters);
 
-        // Obtener datos y conteo total en paralelo
         const [
             data,
             totalCount
@@ -145,7 +137,6 @@ class ElectricBalanceController {
             )
         ]);
 
-        // Calcular paginación
         const totalPages = Math.ceil(totalCount.count / pagination.pageSize);
 
         return {
@@ -173,10 +164,8 @@ class ElectricBalanceController {
 
         this.logger.debug(`Getting electric balance stats: ${startDate} - ${endDate} (${timeScope})`);
 
-        // Validar parámetros
         this._validateDateRange(startDate, endDate);
 
-        // Obtener estadísticas
         const stats = await this.repositories.electricBalanceRepository.getStatsByDateRange(
             startDate,
             endDate,
@@ -206,17 +195,14 @@ class ElectricBalanceController {
 
         this.logger.debug(`Getting electric balance analysis: ${startDate} - ${endDate} (${timeScope})`);
 
-        // Validar parámetros
         this._validateDateRange(startDate, endDate);
 
-        // Obtener análisis mediante el servicio de dominio
         const analysis = await this.services.electricBalanceService.analyzeBalanceDataByDateRange(
             startDate,
             endDate,
             timeScope
         );
 
-        // Añadir datos adicionales según opciones
         if (options.includePatterns) {
             const patterns = await this.services.electricBalanceService.detectPatternsAndAnomalies(
                 startDate,
@@ -263,11 +249,9 @@ class ElectricBalanceController {
 
         this.logger.debug('Comparing electric balance periods');
 
-        // Validar parámetros
         this._validateDateRange(currentStartDate, currentEndDate);
         this._validateDateRange(previousStartDate, previousEndDate);
 
-        // Realizar comparación
         const comparison = await this.services.electricBalanceService.comparePeriods(
             currentStartDate,
             currentEndDate,
@@ -307,17 +291,14 @@ class ElectricBalanceController {
 
         this.logger.debug(`Refreshing electric balance data: ${startDate} - ${endDate} (${timeScope})`);
 
-        // Validar parámetros
         this._validateDateRange(startDate, endDate);
 
-        // Instanciar caso de uso
         const fetchREEDataUseCase = new FetchREEData(
             this.services.reeApiService,
             this.repositories.electricBalanceRepository,
             this.logger
         );
 
-        // Ejecutar caso de uso
         const result = await fetchREEDataUseCase.execute({
             startDate,
             endDate,
@@ -350,10 +331,8 @@ class ElectricBalanceController {
 
         this.logger.debug(`Getting generation distribution: ${startDate} - ${endDate} (${timeScope})`);
 
-        // Validar parámetros
         this._validateDateRange(startDate, endDate);
 
-        // Obtener distribución
         const distribution = await this.repositories.electricBalanceRepository.getGenerationDistribution(
             startDate,
             endDate,
@@ -378,10 +357,8 @@ class ElectricBalanceController {
 
         this.logger.debug(`Getting time series for indicator ${indicator}: ${startDate} - ${endDate} (${timeScope})`);
 
-        // Validar parámetros
         this._validateDateRange(startDate, endDate);
 
-        // Validar indicador
         const allowedIndicators = [
             'totalGeneration', 'totalDemand', 'balance', 'renewablePercentage'
         ];
@@ -392,7 +369,6 @@ class ElectricBalanceController {
             );
         }
 
-        // Obtener serie temporal
         const timeSeries = await this.repositories.electricBalanceRepository.getTimeSeriesForIndicator(
             indicator,
             startDate,
@@ -461,7 +437,6 @@ class ElectricBalanceController {
      * @private
      */
     _validateDateRange(startDate, endDate) {
-        // Verificar que son fechas válidas
         const start = startDate instanceof Date ? startDate : new Date(startDate);
         const end = endDate instanceof Date ? endDate : new Date(endDate);
 
@@ -469,12 +444,10 @@ class ElectricBalanceController {
             throw new InvalidDateRangeError('Invalid date format');
         }
 
-        // Verificar que la fecha de inicio es anterior a la de fin
         if (start > end) {
             throw new InvalidDateRangeError('Start date must be before end date');
         }
 
-        // Verificar que el rango no es excesivamente grande
         const diffInDays = (end - start) / (1000 * 60 * 60 * 24);
 
         if (diffInDays > 366) {

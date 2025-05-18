@@ -52,11 +52,9 @@ class FetchREEData {
                       forceUpdate = false,
                       maxRetries = 3
                   }) {
-        // Parsear fechas si se reciben como string
         const parsedStartDate = startDate instanceof Date ? startDate : new Date(startDate);
         const parsedEndDate = endDate instanceof Date ? endDate : new Date(endDate);
 
-        // Validar fechas
         if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
             throw new ApiRequestError('Invalid date format');
         }
@@ -64,7 +62,6 @@ class FetchREEData {
         try {
             this.logger.info(`Fetching REE data from ${parsedStartDate} to ${parsedEndDate} with timeScope ${timeScope}`);
 
-            // Verificar si ya existen datos para este rango y scope si no se fuerza actualización
             if (!forceUpdate) {
                 const existingData = await this._checkExistingData(parsedStartDate, parsedEndDate, timeScope);
 
@@ -78,7 +75,6 @@ class FetchREEData {
                 }
             }
 
-            // Obtener datos de la API de REE con reintentos en caso de fallo
             const apiResponse = await this._fetchWithRetry(
                 parsedStartDate,
                 parsedEndDate,
@@ -86,15 +82,12 @@ class FetchREEData {
                 maxRetries
             );
 
-            // Verificar que la respuesta sea válida
             if (!apiResponse || !apiResponse.data || !apiResponse.included) {
                 throw new ApiResponseError('Invalid API response structure');
             }
 
-            // Procesar la respuesta en entidades de dominio
             const electricBalances = await this._processApiResponse(apiResponse, timeScope);
 
-            // Guardar los datos procesados en el repositorio
             const savedCount = await this._saveProcessedData(electricBalances, forceUpdate);
 
             return {
@@ -109,14 +102,12 @@ class FetchREEData {
         } catch (error) {
             this.logger.error(`Error fetching REE data: ${error.message}`, error);
 
-            // Rethrow con errores específicos según el tipo de error
             if (error instanceof ApiRequestError ||
                 error instanceof ApiResponseError ||
                 error instanceof RepositoryError) {
                 throw error;
             }
 
-            // Para otros errores, crear un ApiRequestError
             throw new ApiRequestError(
                 `Failed to fetch data from REE API: ${error.message}`,
                 { originalError: error }
@@ -135,7 +126,6 @@ class FetchREEData {
      */
     async _checkExistingData(startDate, endDate, timeScope) {
         try {
-            // Obtener datos existentes para el rango
             const existingData = await this.electricBalanceRepository.findByDateRange(
                 startDate,
                 endDate,
@@ -143,10 +133,8 @@ class FetchREEData {
                 { onlyCount: true }
             );
 
-            // Calcular cuántos registros deberíamos tener según el rango y granularidad
             const expectedCount = this._calculateExpectedRecordCount(startDate, endDate, timeScope);
 
-            // Comprobar si tenemos todos los datos esperados
             const complete = (existingData.count >= expectedCount);
 
             return {
@@ -158,7 +146,6 @@ class FetchREEData {
 
         } catch (error) {
             this.logger.warn(`Error checking existing data: ${error.message}`);
-            // Si hay error al verificar, asumimos que no hay datos completos
             return { complete: false, count: 0, expected: 0, missing: 0 };
         }
     }
@@ -209,11 +196,9 @@ class FetchREEData {
             try {
                 attempts++;
 
-                // Formatear fechas para la API
                 const formattedStartDate = this._formatDateForApi(startDate);
                 const formattedEndDate = this._formatDateForApi(endDate);
 
-                // Realizar la petición a la API
                 const response = await this.reeApiService.fetchBalanceData(
                     formattedStartDate,
                     formattedEndDate,
@@ -225,12 +210,10 @@ class FetchREEData {
             } catch (error) {
                 lastError = error;
 
-                // Registrar el intento fallido
                 this.logger.warn(
                     `Attempt ${attempts}/${maxRetries} failed: ${error.message}`
                 );
 
-                // Si aún quedan reintentos, esperar antes del siguiente
                 if (attempts < maxRetries) {
                     const delay = Math.pow(2, attempts) * 1000; // Backoff exponencial
                     this.logger.info(`Retrying in ${delay}ms...`);
@@ -239,7 +222,6 @@ class FetchREEData {
             }
         }
 
-        // Si llegamos aquí, se han agotado los reintentos
         throw new ApiRequestError(
             `Failed to fetch data after ${maxRetries} attempts: ${lastError.message}`,
             { originalError: lastError }
@@ -275,15 +257,12 @@ class FetchREEData {
         this.logger.info('Processing API response');
 
         try {
-            // Si los datos vienen agrupados por día/mes/año, tendremos múltiples puntos en data.attributes.values
             if (apiResponse.data &&
                 apiResponse.data.attributes &&
                 apiResponse.data.attributes.values &&
                 Array.isArray(apiResponse.data.attributes.values)) {
 
-                // Para cada punto de datos, crear una entidad ElectricBalance
                 return apiResponse.data.attributes.values.map(dataPoint => {
-                    // Crear una copia de la respuesta original pero con este punto específico
                     const pointResponse = {
                         ...apiResponse,
                         data: {
@@ -299,7 +278,6 @@ class FetchREEData {
                     return ElectricBalance.fromREEApiResponse(pointResponse);
                 });
             } else {
-                // Si es solo un punto de datos (caso normal)
                 return [ElectricBalance.fromREEApiResponse(apiResponse)];
             }
         } catch (error) {
@@ -329,7 +307,6 @@ class FetchREEData {
             this.logger.info(`Saving ${electricBalances.length} electric balance records`);
             this.logger.debug(`First record timestamp: ${electricBalances[0].timestamp}`);
 
-            // Si no se fuerza actualización, filtrar solo los nuevos
             if (!forceUpdate) {
                 const filteredBalances = [];
 
@@ -349,11 +326,9 @@ class FetchREEData {
                     return 0;
                 }
 
-                // Guardar solo los nuevos registros
                 await this.electricBalanceRepository.saveMany(filteredBalances);
                 return filteredBalances.length;
             } else {
-                // Guardar/actualizar todos los registros
                 await this.electricBalanceRepository.saveMany(electricBalances);
                 return electricBalances.length;
             }

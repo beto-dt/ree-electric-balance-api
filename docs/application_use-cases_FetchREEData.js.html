@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: application/use-cases/FetchREEData.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: application/use-cases/FetchREEData.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @file FetchREEData.js
+ * @description Caso de uso para obtener datos de la API de REE y almacenarlos
+ *
+ * Este caso de uso se encarga de consultar la API pública de REE,
+ * procesar los datos recibidos y almacenarlos en el repositorio.
+ * Incluye manejo de errores, reintentos y validación de datos.
+ */
+
+const ElectricBalance = require('../../domain/entities/ElectricBalance');
+const {
+    ApiRequestError,
+    ApiResponseError,
+    RepositoryError
+} = require('../errors/ApplicationErrors');
+
+/**
+ * Clase que implementa el caso de uso para obtener datos de la API de REE
+ */
+class FetchREEData {
+    /**
+     * Constructor del caso de uso
+     *
+     * @param {import('../../infrastructure/external/REEApiService')} reeApiService - Servicio para consumir la API de REE
+     * @param {import('../../domain/repositories/ElectricBalanceRepository')} electricBalanceRepository - Repositorio de balance eléctrico
+     * @param {Object} logger - Logger para registrar eventos y errores
+     */
+    constructor(reeApiService, electricBalanceRepository, logger) {
+        this.reeApiService = reeApiService;
+        this.electricBalanceRepository = electricBalanceRepository;
+        this.logger = logger || console;
+    }
+
+    /**
+     * Ejecuta el caso de uso para obtener datos de REE
+     *
+     * @param {Object} params - Parámetros del caso de uso
+     * @param {Date|string} params.startDate - Fecha de inicio
+     * @param {Date|string} params.endDate - Fecha de fin
+     * @param {string} [params.timeScope='day'] - Granularidad temporal (hour, day, month, year)
+     * @param {boolean} [params.forceUpdate=false] - Forzar actualización incluso si los datos ya existen
+     * @param {number} [params.maxRetries=3] - Número máximo de reintentos en caso de fallo
+     * @returns {Promise&lt;Object>} - Resultado de la operación
+     * @throws {ApiRequestError} - Si hay problemas al realizar la petición
+     * @throws {ApiResponseError} - Si la respuesta de la API es incorrecta
+     * @throws {RepositoryError} - Si hay problemas al guardar los datos
+     */
+    async execute({
+                      startDate,
+                      endDate,
+                      timeScope = 'day',
+                      forceUpdate = false,
+                      maxRetries = 3
+                  }) {
+        const parsedStartDate = startDate instanceof Date ? startDate : new Date(startDate);
+        const parsedEndDate = endDate instanceof Date ? endDate : new Date(endDate);
+
+        if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
+            throw new ApiRequestError('Invalid date format');
+        }
+
+        try {
+            this.logger.info(`Fetching REE data from ${parsedStartDate} to ${parsedEndDate} with timeScope ${timeScope}`);
+
+            if (!forceUpdate) {
+                const existingData = await this._checkExistingData(parsedStartDate, parsedEndDate, timeScope);
+
+                if (existingData.complete) {
+                    this.logger.info('Data already exists for this range and will not be updated');
+                    return {
+                        status: 'skipped',
+                        message: 'Data already exists for this range',
+                        existingCount: existingData.count
+                    };
+                }
+            }
+
+            const apiResponse = await this._fetchWithRetry(
+                parsedStartDate,
+                parsedEndDate,
+                timeScope,
+                maxRetries
+            );
+
+            if (!apiResponse || !apiResponse.data || !apiResponse.included) {
+                throw new ApiResponseError('Invalid API response structure');
+            }
+
+            const electricBalances = await this._processApiResponse(apiResponse, timeScope);
+
+            const savedCount = await this._saveProcessedData(electricBalances, forceUpdate);
+
+            return {
+                status: 'success',
+                message: `Successfully fetched and saved data from REE API`,
+                savedCount,
+                timeScope,
+                startDate: parsedStartDate,
+                endDate: parsedEndDate
+            };
+
+        } catch (error) {
+            this.logger.error(`Error fetching REE data: ${error.message}`, error);
+
+            if (error instanceof ApiRequestError ||
+                error instanceof ApiResponseError ||
+                error instanceof RepositoryError) {
+                throw error;
+            }
+
+            throw new ApiRequestError(
+                `Failed to fetch data from REE API: ${error.message}`,
+                { originalError: error }
+            );
+        }
+    }
+
+    /**
+     * Verifica si ya existen datos para el rango de fechas
+     *
+     * @param {Date} startDate - Fecha de inicio
+     * @param {Date} endDate - Fecha de fin
+     * @param {string} timeScope - Granularidad temporal
+     * @returns {Promise&lt;Object>} - Información sobre datos existentes
+     * @private
+     */
+    async _checkExistingData(startDate, endDate, timeScope) {
+        try {
+            const existingData = await this.electricBalanceRepository.findByDateRange(
+                startDate,
+                endDate,
+                timeScope,
+                { onlyCount: true }
+            );
+
+            const expectedCount = this._calculateExpectedRecordCount(startDate, endDate, timeScope);
+
+            const complete = (existingData.count >= expectedCount);
+
+            return {
+                complete,
+                count: existingData.count,
+                expected: expectedCount,
+                missing: expectedCount - existingData.count
+            };
+
+        } catch (error) {
+            this.logger.warn(`Error checking existing data: ${error.message}`);
+            return { complete: false, count: 0, expected: 0, missing: 0 };
+        }
+    }
+
+    /**
+     * Calcula el número esperado de registros según el rango y granularidad
+     *
+     * @param {Date} startDate - Fecha de inicio
+     * @param {Date} endDate - Fecha de fin
+     * @param {string} timeScope - Granularidad temporal
+     * @returns {number} - Número esperado de registros
+     * @private
+     */
+    _calculateExpectedRecordCount(startDate, endDate, timeScope) {
+        const diffMs = endDate.getTime() - startDate.getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+        switch (timeScope) {
+            case 'hour':
+                return Math.ceil(diffDays * 24);
+            case 'day':
+                return Math.ceil(diffDays);
+            case 'month':
+                return Math.ceil(diffDays / 30);
+            case 'year':
+                return Math.ceil(diffDays / 365);
+            default:
+                return Math.ceil(diffDays);
+        }
+    }
+
+    /**
+     * Obtiene datos de la API con reintentos en caso de fallo
+     *
+     * @param {Date} startDate - Fecha de inicio
+     * @param {Date} endDate - Fecha de fin
+     * @param {string} timeScope - Granularidad temporal
+     * @param {number} maxRetries - Número máximo de reintentos
+     * @returns {Promise&lt;Object>} - Respuesta de la API
+     * @throws {ApiRequestError} - Si no se puede obtener los datos después de los reintentos
+     * @private
+     */
+    async _fetchWithRetry(startDate, endDate, timeScope, maxRetries) {
+        let attempts = 0;
+        let lastError = null;
+
+        while (attempts &lt; maxRetries) {
+            try {
+                attempts++;
+
+                const formattedStartDate = this._formatDateForApi(startDate);
+                const formattedEndDate = this._formatDateForApi(endDate);
+
+                const response = await this.reeApiService.fetchBalanceData(
+                    formattedStartDate,
+                    formattedEndDate,
+                    timeScope
+                );
+
+                return response;
+
+            } catch (error) {
+                lastError = error;
+
+                this.logger.warn(
+                    `Attempt ${attempts}/${maxRetries} failed: ${error.message}`
+                );
+
+                if (attempts &lt; maxRetries) {
+                    const delay = Math.pow(2, attempts) * 1000; // Backoff exponencial
+                    this.logger.info(`Retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        throw new ApiRequestError(
+            `Failed to fetch data after ${maxRetries} attempts: ${lastError.message}`,
+            { originalError: lastError }
+        );
+    }
+
+    /**
+     * Formatea una fecha para la API de REE
+     *
+     * @param {Date} date - Fecha a formatear
+     * @returns {string} - Fecha formateada
+     * @private
+     */
+    _formatDateForApi(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+
+    /**
+     * Procesa la respuesta de la API y crea entidades de dominio
+     *
+     * @param {Object} apiResponse - Respuesta de la API
+     * @param {string} timeScope - Granularidad temporal
+     * @returns {Promise&lt;Array&lt;import('../../domain/entities/ElectricBalance')>>} - Entidades procesadas
+     * @private
+     */
+    async _processApiResponse(apiResponse, timeScope) {
+        this.logger.info('Processing API response');
+
+        try {
+            if (apiResponse.data &amp;&amp;
+                apiResponse.data.attributes &amp;&amp;
+                apiResponse.data.attributes.values &amp;&amp;
+                Array.isArray(apiResponse.data.attributes.values)) {
+
+                return apiResponse.data.attributes.values.map(dataPoint => {
+                    const pointResponse = {
+                        ...apiResponse,
+                        data: {
+                            ...apiResponse.data,
+                            attributes: {
+                                ...apiResponse.data.attributes,
+                                'last-update': dataPoint.datetime || dataPoint.date,
+                                'time-trunc': timeScope
+                            }
+                        }
+                    };
+
+                    return ElectricBalance.fromREEApiResponse(pointResponse);
+                });
+            } else {
+                return [ElectricBalance.fromREEApiResponse(apiResponse)];
+            }
+        } catch (error) {
+            throw new ApiResponseError(
+                `Error processing API response: ${error.message}`,
+                { originalError: error }
+            );
+        }
+    }
+
+    /**
+     * Guarda las entidades procesadas en el repositorio
+     *
+     * @param {Array&lt;import('../../domain/entities/ElectricBalance')>} electricBalances - Entidades a guardar
+     * @param {boolean} forceUpdate - Si se debe forzar la actualización de datos existentes
+     * @returns {Promise&lt;number>} - Número de entidades guardadas
+     * @throws {RepositoryError} - Si hay problemas al guardar los datos
+     * @private
+     */
+    async _saveProcessedData(electricBalances, forceUpdate) {
+        if (!electricBalances || electricBalances.length === 0) {
+            this.logger.warn('No data to save');
+            return 0;
+        }
+
+        try {
+            this.logger.info(`Saving ${electricBalances.length} electric balance records`);
+            this.logger.debug(`First record timestamp: ${electricBalances[0].timestamp}`);
+
+            if (!forceUpdate) {
+                const filteredBalances = [];
+
+                for (const balance of electricBalances) {
+                    const exists = await this.electricBalanceRepository.existsForDateAndScope(
+                        balance.timestamp,
+                        balance.timeScope
+                    );
+
+                    if (!exists) {
+                        filteredBalances.push(balance);
+                    }
+                }
+
+                if (filteredBalances.length === 0) {
+                    this.logger.info('All records already exist in the database');
+                    return 0;
+                }
+
+                await this.electricBalanceRepository.saveMany(filteredBalances);
+                return filteredBalances.length;
+            } else {
+                await this.electricBalanceRepository.saveMany(electricBalances);
+                return electricBalances.length;
+            }
+        } catch (error) {
+            throw new RepositoryError(
+                `Error saving electric balance data: ${error.message}`,
+                { originalError: error }
+            );
+        }
+    }
+}
+
+module.exports = FetchREEData;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="ApiRequestError.html">ApiRequestError</a></li><li><a href="ApiResponseError.html">ApiResponseError</a></li><li><a href="ApplicationError.html">ApplicationError</a></li><li><a href="BusinessRuleViolationError.html">BusinessRuleViolationError</a></li><li><a href="ConfigurationError.html">ConfigurationError</a></li><li><a href="DuplicateDataError.html">DuplicateDataError</a></li><li><a href="ElectricBalance.html">ElectricBalance</a></li><li><a href="ElectricBalanceController.html">ElectricBalanceController</a></li><li><a href="ExternalResourceError.html">ExternalResourceError</a></li><li><a href="FetchREEData.html">FetchREEData</a></li><li><a href="GetElectricBalanceByDateRange.html">GetElectricBalanceByDateRange</a></li><li><a href="InvalidDataError.html">InvalidDataError</a></li><li><a href="InvalidDateRangeError.html">InvalidDateRangeError</a></li><li><a href="MongoElectricBalanceRepository.html">MongoElectricBalanceRepository</a></li><li><a href="NetworkError.html">NetworkError</a></li><li><a href="NotAuthorizedError.html">NotAuthorizedError</a></li><li><a href="NotFoundError.html">NotFoundError</a></li><li><a href="REEApiService.html">REEApiService</a></li><li><a href="REEDataFetcher.html">REEDataFetcher</a></li><li><a href="RepositoryError.html">RepositoryError</a></li><li><a href="SchedulerManager.html">SchedulerManager</a></li><li><a href="ValidationError.html">ValidationError</a></li></ul><h3>Global</h3><ul><li><a href="global.html#MongoConnection">MongoConnection</a></li><li><a href="global.html#balanceItemSchema">balanceItemSchema</a></li><li><a href="global.html#bootstrap">bootstrap</a></li><li><a href="global.html#compareDatesIgnoringTime">compareDatesIgnoringTime</a></li><li><a href="global.html#config">config</a></li><li><a href="global.html#connectToDatabase">connectToDatabase</a></li><li><a href="global.html#createComponentLogger">createComponentLogger</a></li><li><a href="global.html#createGraphQLLogger">createGraphQLLogger</a></li><li><a href="global.html#createGraphQLServer">createGraphQLServer</a></li><li><a href="global.html#createTransports">createTransports</a></li><li><a href="global.html#determineMongoErrorCode">determineMongoErrorCode</a></li><li><a href="global.html#determineTimeScope">determineTimeScope</a></li><li><a href="global.html#electricBalanceResolvers">electricBalanceResolvers</a></li><li><a href="global.html#electricBalanceSchema">electricBalanceSchema</a></li><li><a href="global.html#errorLogger">errorLogger</a></li><li><a href="global.html#errorMiddleware">errorMiddleware</a></li><li><a href="global.html#extendWithLogger">extendWithLogger</a></li><li><a href="global.html#formatDate">formatDate</a></li><li><a href="global.html#formatDateForREEApi">formatDateForREEApi</a></li><li><a href="global.html#formatDateForUI">formatDateForUI</a></li><li><a href="global.html#formatDateISO">formatDateISO</a></li><li><a href="global.html#getDateRangeForPeriod">getDateRangeForPeriod</a></li><li><a href="global.html#getEnv">getEnv</a></li><li><a href="global.html#getErrorCodeFromType">getErrorCodeFromType</a></li><li><a href="global.html#getHttpStatusFromError">getHttpStatusFromError</a></li><li><a href="global.html#getMostRecentDate">getMostRecentDate</a></li><li><a href="global.html#handleApiError">handleApiError</a></li><li><a href="global.html#handleDatabaseError">handleDatabaseError</a></li><li><a href="global.html#handleError">handleError</a></li><li><a href="global.html#handleREEApiError">handleREEApiError</a></li><li><a href="global.html#handleValidationError">handleValidationError</a></li><li><a href="global.html#initializeRepositories">initializeRepositories</a></li><li><a href="global.html#initializeSchedulers">initializeSchedulers</a></li><li><a href="global.html#initializeServices">initializeServices</a></li><li><a href="global.html#logFormats">logFormats</a></li><li><a href="global.html#logger">logger</a></li><li><a href="global.html#mapErrorToGraphQLError">mapErrorToGraphQLError</a></li><li><a href="global.html#parseDate">parseDate</a></li><li><a href="global.html#requestLogger">requestLogger</a></li><li><a href="global.html#setupBasicRoutes">setupBasicRoutes</a></li><li><a href="global.html#setupGracefulShutdown">setupGracefulShutdown</a></li><li><a href="global.html#setupGraphQLServer">setupGraphQLServer</a></li><li><a href="global.html#setupMiddlewares">setupMiddlewares</a></li><li><a href="global.html#toArray">toArray</a></li><li><a href="global.html#toBoolean">toBoolean</a></li><li><a href="global.html#toNumber">toNumber</a></li><li><a href="global.html#toObject">toObject</a></li><li><a href="global.html#tryListen">tryListen</a></li><li><a href="global.html#validateDateRange">validateDateRange</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Sun May 18 2025 01:47:36 GMT-0500 (Ecuador Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

@@ -35,10 +35,8 @@ const { schema, configureMocks } = require('./schema');
  * @returns {Object} - Objeto con el servidor y métodos para iniciar/detener
  */
 function createGraphQLServer({ repositories, services, dataSources = {}, logger, config, expressApp }) {
-    // Crear la aplicación Express
     const app = expressApp || express();
 
-    // Configurar middleware
     app.use(cors({
         origin: config.cors.origins || '*',
         methods: config.cors.methods || ['GET', 'POST', 'OPTIONS'],
@@ -47,7 +45,6 @@ function createGraphQLServer({ repositories, services, dataSources = {}, logger,
 
     app.use(compression());
 
-    // Middleware para logging de solicitudes
     app.use((req, res, next) => {
         const start = Date.now();
 
@@ -59,21 +56,16 @@ function createGraphQLServer({ repositories, services, dataSources = {}, logger,
         next();
     });
 
-    // Crear el servidor HTTP
     const httpServer = http.createServer(app);
 
-    // Configurar plugins para Apollo Server
     const plugins = [
-        // Plugin para gestionar el cierre del servidor HTTP
         ApolloServerPluginDrainHttpServer({ httpServer }),
 
-        // Plugin para control de caché
         ApolloServerPluginCacheControl({
             defaultMaxAge: 60, // 1 minuto
             calculateHttpHeaders: true
         }),
 
-        // Plugin para página de inicio según entorno
         process.env.NODE_ENV === 'production'
             ? ApolloServerPluginLandingPageProductionDefault({
                 graphRef: config.apollo.graphRef,
@@ -82,7 +74,6 @@ function createGraphQLServer({ repositories, services, dataSources = {}, logger,
             : ApolloServerPluginLandingPageLocalDefault({ footer: false })
     ];
 
-    // Añadir reporting en producción si se configura
     if (process.env.NODE_ENV === 'production' && config.apollo.reportingEnabled) {
         plugins.push(
             ApolloServerPluginUsageReporting({
@@ -101,37 +92,31 @@ function createGraphQLServer({ repositories, services, dataSources = {}, logger,
         );
     }
 
-    // Crear servidor Apollo
     const server = new ApolloServer({
         schema: configureMocks(schema),
-        dataSources: () => dataSources, // Esto es correcto - dejarlo así
+        dataSources: () => dataSources,
         context: ({ req }) => {
-            // Extraer token y verificar autenticación (simplificado)
             const token = req.headers.authorization || '';
-            const isAdmin = token.includes('admin-token'); // Simplificado, usar autenticación real en producción
+            const isAdmin = token.includes('admin-token');
 
             return {
                 repositories,
                 services,
-                isAdmin, // Mover esto directamente al contexto
+                isAdmin,
                 logger
             };
         },
         validationRules: [
-            // Limitar profundidad de queries para prevenir ataques DoS
             depthLimit(config.graphql.maxDepth || 10),
-            // Limitar complejidad de queries
             createComplexityLimitRule(config.graphql.maxComplexity || 1000)
         ],
         plugins,
         formatError: (error) => {
-            // Logging de errores
             logger.error(`GraphQL Error: ${error.message}`, {
                 error,
                 path: error.path
             });
 
-            // En desarrollo, devolver stack trace; en producción, solo mensaje
             if (process.env.NODE_ENV !== 'production') {
                 return {
                     message: error.message,
@@ -142,7 +127,6 @@ function createGraphQLServer({ repositories, services, dataSources = {}, logger,
                 };
             }
 
-            // En producción, ocultar detalles internos
             return {
                 message: error.message,
                 path: error.path,
@@ -151,7 +135,6 @@ function createGraphQLServer({ repositories, services, dataSources = {}, logger,
                 }
             };
         },
-        // Configuración general
         introspection: config.graphql.introspection || process.env.NODE_ENV !== 'production',
         debug: config.graphql.debug || process.env.NODE_ENV !== 'production',
         cache: 'bounded'
@@ -159,17 +142,14 @@ function createGraphQLServer({ repositories, services, dataSources = {}, logger,
 
     // Método para iniciar el servidor
     const start = async (port = config.port || 4000) => {
-        // Iniciar Apollo Server
         await server.start();
 
-        // Aplicar middleware de Apollo a Express
         server.applyMiddleware({
             app,
             path: config.graphql.path || '/graphql',
-            cors: false // Ya configurado en Express
+            cors: false
         });
 
-        // Iniciar servidor HTTP
         await new Promise(resolve => httpServer.listen({ port }, resolve));
 
         logger.info(`GraphQL server ready at http://localhost:${port}${server.graphqlPath}`);
@@ -191,7 +171,6 @@ function createGraphQLServer({ repositories, services, dataSources = {}, logger,
         logger.info('GraphQL server stopped');
     };
 
-    // Devolver objeto con el servidor y métodos
     return {
         server,
         httpServer,

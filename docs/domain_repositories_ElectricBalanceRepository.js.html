@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: domain/repositories/ElectricBalanceRepository.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: domain/repositories/ElectricBalanceRepository.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @file ElectricBalanceRepository.js
+ * @description Interfaz del repositorio para la entidad ElectricBalance
+ *
+ * Esta interfaz define los métodos que cualquier implementación
+ * concreta del repositorio debe proporcionar. Sigue el principio de
+ * inversión de dependencias de la Arquitectura Limpia.
+ */
+
+/**
+ * @interface ElectricBalanceRepository
+ */
+class ElectricBalanceRepository {
+    /**
+     * Guarda un nuevo balance eléctrico en el repositorio
+     *
+     * @param {import('../entities/ElectricBalance')} electricBalance - Entidad ElectricBalance a guardar
+     * @returns {Promise&lt;import('../entities/ElectricBalance')>} - ElectricBalance guardado con ID asignado
+     * @throws {Error} - Si hay problemas al guardar los datos
+     */
+    async save(electricBalance) {
+        throw new Error('ElectricBalanceRepository.save must be implemented');
+    }
+
+    /**
+     * Guarda múltiples balances eléctricos en una sola operación
+     *
+     * @param {Array&lt;import('../entities/ElectricBalance')>} electricBalances - Array de entidades ElectricBalance
+     * @returns {Promise&lt;Array&lt;import('../entities/ElectricBalance')>>} - Array de ElectricBalances guardados
+     * @throws {Error} - Si hay problemas al guardar los datos
+     */
+    async saveMany(electricBalances) {
+        throw new Error('ElectricBalanceRepository.saveMany must be implemented');
+    }
+
+    /**
+     * Busca un balance eléctrico por su ID
+     *
+     * @param {string} id - ID del balance eléctrico a buscar
+     * @returns {Promise&lt;import('../entities/ElectricBalance') | null>} - ElectricBalance encontrado o null
+     * @throws {Error} - Si hay problemas al buscar los datos
+     */
+    async findById(id) {
+        throw new Error('ElectricBalanceRepository.findById must be implemented');
+    }
+
+    /**
+     * Busca balances eléctricos por rango de fechas
+     *
+     * @param {Date} startDate - Fecha de inicio del rango
+     * @param {Date} endDate - Fecha de fin del rango
+     * @param {string} timeScope - Alcance temporal (day, month, year)
+     * @param {Object} options - Opciones adicionales (paginación, ordenación, etc.)
+     * @returns {Promise&lt;Array&lt;import('../entities/ElectricBalance')>>} - Array de ElectricBalances
+     * @throws {Error} - Si hay problemas al buscar los datos
+     */
+    async findByDateRange(startDate, endDate, timeScope = 'day', options = {}) {
+        throw new Error('ElectricBalanceRepository.findByDateRange must be implemented');
+    }
+
+    /**
+     * Obtiene estadísticas agregadas de balance eléctrico por rango de fechas
+     *
+     * @param {Date} startDate - Fecha de inicio del rango
+     * @param {Date} endDate - Fecha de fin del rango
+     * @param {string} timeScope - Alcance temporal (day, month, year)
+     * @returns {Promise&lt;Object>} - Estadísticas agregadas
+     * @throws {Error} - Si hay problemas al calcular las estadísticas
+     */
+    async getStatsByDateRange(startDate, endDate, timeScope = 'day') {
+        throw new Error('ElectricBalanceRepository.getStatsByDateRange must be implemented');
+    }
+
+    /**
+     * Busca el balance eléctrico más reciente
+     *
+     * @returns {Promise&lt;import('../entities/ElectricBalance') | null>} - ElectricBalance más reciente o null
+     * @throws {Error} - Si hay problemas al buscar los datos
+     */
+    async findMostRecent() {
+        throw new Error('ElectricBalanceRepository.findMostRecent must be implemented');
+    }
+
+    /**
+     * Actualiza un balance eléctrico existente
+     *
+     * @param {string} id - ID del balance eléctrico a actualizar
+     * @param {import('../entities/ElectricBalance')} electricBalance - Datos actualizados
+     * @returns {Promise&lt;import('../entities/ElectricBalance')>} - ElectricBalance actualizado
+     * @throws {Error} - Si hay problemas al actualizar los datos
+     */
+    async update(id, electricBalance) {
+        throw new Error('ElectricBalanceRepository.update must be implemented');
+    }
+
+    /**
+     * Elimina un balance eléctrico por su ID
+     *
+     * @param {string} id - ID del balance eléctrico a eliminar
+     * @returns {Promise&lt;boolean>} - true si se eliminó correctamente, false si no existía
+     * @throws {Error} - Si hay problemas al eliminar los datos
+     */
+    async delete(id) {
+        throw new Error('ElectricBalanceRepository.delete must be implemented');
+    }
+
+    /**
+     * Verifica si ya existe un balance eléctrico para una fecha y alcance específicos
+     *
+     * @param {Date} timestamp - Fecha y hora a verificar
+     * @param {string} timeScope - Alcance temporal (day, month, year)
+     * @returns {Promise&lt;boolean>} - true si existe, false si no
+     * @throws {Error} - Si hay problemas al verificar los datos
+     */
+    async existsForDateAndScope(timestamp, timeScope) {
+        throw new Error('ElectricBalanceRepository.existsForDateAndScope must be implemented');
+    }
+
+    /**
+     * Obtiene la distribución de generación por tipo para un rango de fechas
+     *
+     * @param {Date} startDate - Fecha de inicio del rango
+     * @param {Date} endDate - Fecha de fin del rango
+     * @param {string} timeScope - Alcance temporal (day, month, year)
+     * @returns {Promise&lt;Object>} - Distribución de generación por tipo
+     * @throws {Error} - Si hay problemas al obtener los datos
+     */
+    async getGenerationDistribution(startDate, endDate, timeScope = 'day') {
+        throw new Error('ElectricBalanceRepository.getGenerationDistribution must be implemented');
+    }
+
+    /**
+     * Obtiene la evolución temporal de un indicador específico
+     *
+     * @param {string} indicator - Indicador a obtener (totalGeneration, renewablePercentage, etc.)
+     * @param {Date} startDate - Fecha de inicio del rango
+     * @param {Date} endDate - Fecha de fin del rango
+     * @param {string} timeScope - Alcance temporal (day, month, year)
+     * @returns {Promise&lt;Array&lt;Object>>} - Evolución temporal del indicador
+     * @throws {Error} - Si hay problemas al obtener los datos
+     */
+    async getTimeSeriesForIndicator(indicator, startDate, endDate, timeScope = 'day') {
+        throw new Error('ElectricBalanceRepository.getTimeSeriesForIndicator must be implemented');
+    }
+}
+
+module.exports = ElectricBalanceRepository;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="ApiRequestError.html">ApiRequestError</a></li><li><a href="ApiResponseError.html">ApiResponseError</a></li><li><a href="ApplicationError.html">ApplicationError</a></li><li><a href="BusinessRuleViolationError.html">BusinessRuleViolationError</a></li><li><a href="ConfigurationError.html">ConfigurationError</a></li><li><a href="DuplicateDataError.html">DuplicateDataError</a></li><li><a href="ElectricBalance.html">ElectricBalance</a></li><li><a href="ElectricBalanceController.html">ElectricBalanceController</a></li><li><a href="ExternalResourceError.html">ExternalResourceError</a></li><li><a href="FetchREEData.html">FetchREEData</a></li><li><a href="GetElectricBalanceByDateRange.html">GetElectricBalanceByDateRange</a></li><li><a href="InvalidDataError.html">InvalidDataError</a></li><li><a href="InvalidDateRangeError.html">InvalidDateRangeError</a></li><li><a href="MongoElectricBalanceRepository.html">MongoElectricBalanceRepository</a></li><li><a href="NetworkError.html">NetworkError</a></li><li><a href="NotAuthorizedError.html">NotAuthorizedError</a></li><li><a href="NotFoundError.html">NotFoundError</a></li><li><a href="REEApiService.html">REEApiService</a></li><li><a href="REEDataFetcher.html">REEDataFetcher</a></li><li><a href="RepositoryError.html">RepositoryError</a></li><li><a href="SchedulerManager.html">SchedulerManager</a></li><li><a href="ValidationError.html">ValidationError</a></li></ul><h3>Interfaces</h3><ul><li><a href="ElectricBalanceRepository.html">ElectricBalanceRepository</a></li></ul><h3>Global</h3><ul><li><a href="global.html#MongoConnection">MongoConnection</a></li><li><a href="global.html#balanceItemSchema">balanceItemSchema</a></li><li><a href="global.html#bootstrap">bootstrap</a></li><li><a href="global.html#compareDatesIgnoringTime">compareDatesIgnoringTime</a></li><li><a href="global.html#config">config</a></li><li><a href="global.html#connectToDatabase">connectToDatabase</a></li><li><a href="global.html#createComponentLogger">createComponentLogger</a></li><li><a href="global.html#createGraphQLLogger">createGraphQLLogger</a></li><li><a href="global.html#createGraphQLServer">createGraphQLServer</a></li><li><a href="global.html#createTransports">createTransports</a></li><li><a href="global.html#determineMongoErrorCode">determineMongoErrorCode</a></li><li><a href="global.html#determineTimeScope">determineTimeScope</a></li><li><a href="global.html#electricBalanceResolvers">electricBalanceResolvers</a></li><li><a href="global.html#electricBalanceSchema">electricBalanceSchema</a></li><li><a href="global.html#errorLogger">errorLogger</a></li><li><a href="global.html#errorMiddleware">errorMiddleware</a></li><li><a href="global.html#extendWithLogger">extendWithLogger</a></li><li><a href="global.html#formatDate">formatDate</a></li><li><a href="global.html#formatDateForREEApi">formatDateForREEApi</a></li><li><a href="global.html#formatDateForUI">formatDateForUI</a></li><li><a href="global.html#formatDateISO">formatDateISO</a></li><li><a href="global.html#getDateRangeForPeriod">getDateRangeForPeriod</a></li><li><a href="global.html#getEnv">getEnv</a></li><li><a href="global.html#getErrorCodeFromType">getErrorCodeFromType</a></li><li><a href="global.html#getHttpStatusFromError">getHttpStatusFromError</a></li><li><a href="global.html#getMostRecentDate">getMostRecentDate</a></li><li><a href="global.html#handleApiError">handleApiError</a></li><li><a href="global.html#handleDatabaseError">handleDatabaseError</a></li><li><a href="global.html#handleError">handleError</a></li><li><a href="global.html#handleREEApiError">handleREEApiError</a></li><li><a href="global.html#handleValidationError">handleValidationError</a></li><li><a href="global.html#initializeRepositories">initializeRepositories</a></li><li><a href="global.html#initializeSchedulers">initializeSchedulers</a></li><li><a href="global.html#initializeServices">initializeServices</a></li><li><a href="global.html#logFormats">logFormats</a></li><li><a href="global.html#logger">logger</a></li><li><a href="global.html#mapErrorToGraphQLError">mapErrorToGraphQLError</a></li><li><a href="global.html#parseDate">parseDate</a></li><li><a href="global.html#requestLogger">requestLogger</a></li><li><a href="global.html#setupBasicRoutes">setupBasicRoutes</a></li><li><a href="global.html#setupGracefulShutdown">setupGracefulShutdown</a></li><li><a href="global.html#setupGraphQLServer">setupGraphQLServer</a></li><li><a href="global.html#setupMiddlewares">setupMiddlewares</a></li><li><a href="global.html#toArray">toArray</a></li><li><a href="global.html#toBoolean">toBoolean</a></li><li><a href="global.html#toNumber">toNumber</a></li><li><a href="global.html#toObject">toObject</a></li><li><a href="global.html#tryListen">tryListen</a></li><li><a href="global.html#validateDateRange">validateDateRange</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Sun May 18 2025 01:44:27 GMT-0500 (Ecuador Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

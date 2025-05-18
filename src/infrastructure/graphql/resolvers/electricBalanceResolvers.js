@@ -10,14 +10,11 @@
 
 const { GraphQLScalarType } = require('graphql');
 const { Kind } = require('graphql/language');
-const { AuthenticationError, UserInputError, ApolloError } = require('apollo-server-express');
+const { UserInputError, ApolloError } = require('apollo-server-express');
 
-// Importar casos de uso
 const GetElectricBalanceByDateRange = require('../../../application/use-cases/GetElectricBalanceByDateRange');
 const FetchREEData = require('../../../application/use-cases/FetchREEData');
-const StoreElectricBalanceData = require('../../../application/use-cases/StoreElectricBalanceData');
 
-// Importar errores de aplicación para manejo adecuado
 const {
     InvalidDateRangeError,
     ApiRequestError,
@@ -63,7 +60,6 @@ const mapErrorToGraphQLError = (error) => {
         );
     }
 
-    // Error genérico
     return new ApolloError(
         error.message,
         'INTERNAL_SERVER_ERROR',
@@ -71,16 +67,13 @@ const mapErrorToGraphQLError = (error) => {
     );
 };
 
-// Scalar personalizado para fechas
 const DateTimeScalar = new GraphQLScalarType({
     name: 'DateTime',
     description: 'Fecha y hora en formato ISO 8601',
     serialize(value) {
-        // Convertir de Date a string ISO para respuestas
         return value instanceof Date ? value.toISOString() : value;
     },
     parseValue(value) {
-        // Convertir de string ISO a Date para inputs
         return new Date(value);
     },
     parseLiteral(ast) {
@@ -91,7 +84,6 @@ const DateTimeScalar = new GraphQLScalarType({
     },
 });
 
-// Scalar personalizado para objetos JSON
 const JSONObjectScalar = new GraphQLScalarType({
     name: 'JSONObject',
     description: 'Objeto JSON arbitrario',
@@ -120,7 +112,6 @@ const JSONObjectScalar = new GraphQLScalarType({
  * Resolvers para el balance eléctrico
  */
 const electricBalanceResolvers = {
-    // Definición de scalars personalizados
     DateTime: DateTimeScalar,
     JSONObject: JSONObjectScalar,
     ElectricBalance: {

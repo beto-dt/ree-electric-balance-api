@@ -25,7 +25,6 @@ class MongoElectricBalanceRepository extends ElectricBalanceRepository {
         super();
         this.logger = logger;
 
-        // Verificar que el modelo está disponible
         const ElectricBalanceModel = require('../database/models/ElectricBalanceModel');
         if (!ElectricBalanceModel) {
             throw new Error('ElectricBalanceModel not available');
@@ -46,13 +45,10 @@ class MongoElectricBalanceRepository extends ElectricBalanceRepository {
      */
     async save(electricBalance) {
         try {
-            // Convertir la entidad de dominio a documento de MongoDB
             const electricBalanceData = this._mapToDocument(electricBalance);
 
-            // Crear nuevo documento en MongoDB
             const savedDocument = await ElectricBalanceModel.create(electricBalanceData);
 
-            // Convertir documento guardado a entidad de dominio
             return this._mapToEntity(savedDocument);
         } catch (error) {
             this.logger.error(`Error saving electric balance: ${error.message}`, error);
@@ -81,18 +77,15 @@ class MongoElectricBalanceRepository extends ElectricBalanceRepository {
         }
 
         try {
-            // Verificar que el modelo está disponible
             if (!this.model) {
                 this.logger.error('MongoDB model is undefined');
                 throw new Error('MongoDB model is undefined');
             }
 
-            // Convertir entidades a documentos
             const documents = electricBalances.map(entity => this._mapToDocument(entity));
 
             this.logger.debug(`Saving ${documents.length} documents to MongoDB`);
 
-            // Crear documentos uno por uno como alternativa a insertMany
             const savedDocuments = [];
             for (const doc of documents) {
                 const savedDoc = await this.model.create(doc);
@@ -101,7 +94,6 @@ class MongoElectricBalanceRepository extends ElectricBalanceRepository {
 
             this.logger.debug(`Successfully saved ${savedDocuments.length} documents`);
 
-            // Convertir documentos guardados a entidades de dominio
             return savedDocuments.map(doc => this._mapToEntity(doc));
         } catch (error) {
             this.logger.error(`Error saving multiple electric balances: ${error.message}`, error);
@@ -152,63 +144,50 @@ class MongoElectricBalanceRepository extends ElectricBalanceRepository {
      */
     async findByDateRange(startDate, endDate, timeScope = 'day', options = {}) {
         try {
-            // Construir query base
             const query = {
                 timestamp: { $gte: startDate, $lte: endDate }
             };
 
-            // Añadir timeScope si se especifica
             if (timeScope) {
                 query.timeScope = timeScope;
             }
 
-            // Si solo se necesita un conteo
             if (options.onlyCount) {
                 const count = await ElectricBalanceModel.countDocuments(query);
                 return { count };
             }
 
-            // Si solo se necesitan IDs
             if (options.onlyIds) {
                 const documents = await ElectricBalanceModel.find(query).select('_id');
                 return documents.map(doc => doc._id.toString());
             }
 
-            // Opciones de paginación
             const limit = options.limit || 100;
             const skip = options.skip || ((options.page || 1) - 1) * limit;
 
-            // Opciones de ordenación
             const sort = options.sort || { timestamp: 1 };
 
-            // Construir query completa
             let queryBuilder = ElectricBalanceModel.find(query)
                 .sort(sort)
                 .skip(skip)
                 .limit(limit);
 
-            // Aplicar selección de campos si se especifica
             if (options.select) {
                 queryBuilder = queryBuilder.select(options.select);
             }
 
-            // Aplicar filtros adicionales
             if (options.filters) {
                 Object.entries(options.filters).forEach(([key, value]) => {
                     if (key.startsWith('generation.') || key.startsWith('demand.') || key.startsWith('interchange.')) {
-                        // Filtros para arrays anidados
                         queryBuilder = queryBuilder.where(key).equals(value);
                     } else {
-                        // Filtros normales
                         query[key] = value;
                     }
                 });
             }
 
-            // Ejecutar consulta
             const documents = await queryBuilder.exec();
 
-            // Convertir documentos a entidades
             return documents.map(doc => this._mapToEntity(doc));
         } catch (error) {
             this.logger.error(`Error finding electric balances by date range: ${error.message}`, error);
@@ -250,7 +229,6 @@ class MongoElectricBalanceRepository extends ElectricBalanceRepository {
                 };
             }
 
-            // Transformar resultado de agregación
             return {
                 count: stats[0].count,
                 startDate,
@@ -331,7 +309,6 @@ class MongoElectricBalanceRepository extends ElectricBalanceRepository {
      */
     async update(id, electricBalance) {
         try {
-            // Verificar que existe
             const exists = await ElectricBalanceModel.exists({ _id: id });
 
             if (!exists) {
@@ -341,19 +318,16 @@ class MongoElectricBalanceRepository extends ElectricBalanceRepository {
                 );
             }
 
-            // Convertir entidad a documento
             const electricBalanceData = this._mapToDocument(electricBalance);
 
-            // Actualizar documento
             const updatedDocument = await ElectricBalanceModel.findByIdAndUpdate(
                 id,
                 electricBalanceData,
-                { new: true, runValidators: true } // Devolver el documento actualizado y validar
+                { new: true, runValidators: true }
             );
 
             return this._mapToEntity(updatedDocument);
         } catch (error) {
-            // Reenviar errores de NotFound
             if (error instanceof NotFoundError) {
                 throw error;
             }
@@ -409,14 +383,12 @@ class MongoElectricBalanceRepository extends ElectricBalanceRepository {
      */
     async existsForDateAndScope(timestamp, timeScope) {
         try {
-            // Crear rango de fechas para el mismo día
             const startOfDay = new Date(timestamp);
             startOfDay.setHours(0, 0, 0, 0);
 
             const endOfDay = new Date(timestamp);
             endOfDay.setHours(23, 59, 59, 999);
 
-            // Buscar con rango para mayor tolerancia
             const exists = await ElectricBalanceModel.exists({
                 timestamp: { $gte: startOfDay, $lte: endOfDay },
                 timeScope
@@ -455,12 +427,10 @@ class MongoElectricBalanceRepository extends ElectricBalanceRepository {
                 timeScope
             );
 
-            // Calcular el total para porcentajes
             const totalGeneration = distribution.reduce(
                 (sum, item) => sum + item.totalValue, 0
             );
 
-            // Añadir porcentajes respecto al total
             return distribution.map(item => ({
                 ...item,
                 percentage: totalGeneration > 0
@@ -523,7 +493,6 @@ class MongoElectricBalanceRepository extends ElectricBalanceRepository {
      * @private
      */
     _mapToDocument(entity) {
-        // Verificar y corregir valores NaN o no válidos
         const totalGeneration = Number.isFinite(entity.getTotalGeneration())
           ? entity.getTotalGeneration()
           : 0;
@@ -540,7 +509,6 @@ class MongoElectricBalanceRepository extends ElectricBalanceRepository {
           ? entity.getRenewablePercentage()
           : 0;
 
-        // Crear documento para MongoDB con valores seguros
         const document = {
             ...(entity.id ? { _id: entity.id } : {}),
             timestamp: entity.timestamp,
@@ -568,10 +536,8 @@ class MongoElectricBalanceRepository extends ElectricBalanceRepository {
     _mapToEntity(document) {
         if (!document) return null;
 
-        // Usar toObject() para obtener un objeto plano si es un documento de Mongoose
         const docObj = document.toObject ? document.toObject() : document;
 
-        // Crear la entidad con los datos del documento
         const entity = new ElectricBalance({
             id: docObj._id.toString(),
             timestamp: docObj.timestamp,
