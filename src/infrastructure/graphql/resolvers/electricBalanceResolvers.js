@@ -116,16 +116,111 @@ const electricBalanceResolvers = {
     JSONObject: JSONObjectScalar,
     ElectricBalance: {
         totalGeneration: (parent) => {
-            return parent.totalGeneration === null || parent.totalGeneration === undefined ? 0 : parent.totalGeneration;
+            // Si ya tiene un valor válido, usarlo
+            if (parent.totalGeneration !== null && parent.totalGeneration !== undefined && parent.totalGeneration > 0) {
+                return parent.totalGeneration;
+            }
+
+            // Si hay datos de generación, calcular la suma
+            if (parent.generation && Array.isArray(parent.generation) && parent.generation.length > 0) {
+                const total = parent.generation.reduce((sum, item) => {
+                    const value = parseFloat(item.value);
+                    return sum + (Number.isFinite(value) ? value : 0);
+                }, 0);
+                return total;
+            }
+
+            // Si no hay datos, devolver 0
+            return 0;
         },
         totalDemand: (parent) => {
-            return parent.totalDemand === null || parent.totalDemand === undefined ? 0 : parent.totalDemand;
+            // Si ya tiene un valor válido, usarlo
+            if (parent.totalDemand !== null && parent.totalDemand !== undefined && parent.totalDemand > 0) {
+                return parent.totalDemand;
+            }
+
+            // Si hay datos de demanda, calcular la suma
+            if (parent.demand && Array.isArray(parent.demand) && parent.demand.length > 0) {
+                const total = parent.demand.reduce((sum, item) => {
+                    const value = parseFloat(item.value);
+                    return sum + (Number.isFinite(value) ? value : 0);
+                }, 0);
+                return total;
+            }
+
+            // Si no hay datos, devolver 0
+            return 0;
         },
         balance: (parent) => {
-            return parent.balance === null || parent.balance === undefined ? 0 : parent.balance;
+            // Si ya tiene un valor válido, usarlo
+            if (parent.balance !== null && parent.balance !== undefined) {
+                return parent.balance;
+            }
+
+            // Obtener generación y demanda
+            let totalGeneration;
+            let totalDemand;
+
+            // Calcular totalGeneration si es necesario
+            if (parent.totalGeneration !== null && parent.totalGeneration !== undefined && parent.totalGeneration > 0) {
+                totalGeneration = parent.totalGeneration;
+            } else if (parent.generation && Array.isArray(parent.generation) && parent.generation.length > 0) {
+                totalGeneration = parent.generation.reduce((sum, item) => {
+                    const value = parseFloat(item.value);
+                    return sum + (Number.isFinite(value) ? value : 0);
+                }, 0);
+            } else {
+                totalGeneration = 0;
+            }
+
+            // Calcular totalDemand si es necesario
+            if (parent.totalDemand !== null && parent.totalDemand !== undefined && parent.totalDemand > 0) {
+                totalDemand = parent.totalDemand;
+            } else if (parent.demand && Array.isArray(parent.demand) && parent.demand.length > 0) {
+                totalDemand = parent.demand.reduce((sum, item) => {
+                    const value = parseFloat(item.value);
+                    return sum + (Number.isFinite(value) ? value : 0);
+                }, 0);
+            } else {
+                totalDemand = 0;
+            }
+
+            // Calcular y devolver balance
+            return totalGeneration - totalDemand;
         },
         renewablePercentage: (parent) => {
-            return parent.renewablePercentage === null || parent.renewablePercentage === undefined ? 0 : parent.renewablePercentage;
+            // Si ya tiene un valor válido, usarlo
+            if (parent.renewablePercentage !== null && parent.renewablePercentage !== undefined && parent.renewablePercentage > 0) {
+                return parent.renewablePercentage;
+            }
+
+            // Si hay datos de generación, calcular el porcentaje renovable
+            if (parent.generation && Array.isArray(parent.generation) && parent.generation.length > 0) {
+                const renewableTypes = [
+                    'Hidráulica', 'Eólica', 'Solar fotovoltaica', 'Solar térmica',
+                    'Otras renovables', 'Hidroeólica', 'Residuos renovables', 'Generación renovable'
+                ];
+
+                // Calcular total de generación
+                const totalGen = parent.generation.reduce((sum, item) => {
+                    const value = parseFloat(item.value);
+                    return sum + (Number.isFinite(value) ? value : 0);
+                }, 0);
+
+                // Calcular generación renovable
+                const renewableGen = parent.generation
+                  .filter(item => renewableTypes.includes(item.type))
+                  .reduce((sum, item) => {
+                      const value = parseFloat(item.value);
+                      return sum + (Number.isFinite(value) ? value : 0);
+                  }, 0);
+
+                // Calcular porcentaje renovable
+                return totalGen > 0 ? (renewableGen / totalGen) * 100 : 0;
+            }
+
+            // Si no hay datos, devolver 0
+            return 0;
         }
     },
 
